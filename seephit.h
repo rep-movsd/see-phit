@@ -2,6 +2,27 @@
 #include <string>
 using namespace std;
 
+// Allow runtime debugging for development
+#ifdef SPT_DEBUG
+
+#define constexpr 
+#define DUMP cerr
+#define ENDL "\n"
+
+#else
+
+#define DUMP DummyOut
+#define ENDL 0
+
+struct DummyOutStream
+{
+  template<typename T>  constexpr const DummyOutStream& operator <<(const T &) const { return *this;}
+};
+
+constexpr DummyOutStream DummyOut;
+
+#endif
+
 
 struct Symbol
 {
@@ -85,6 +106,7 @@ struct ParseState
 void ParseError(const char* err);
 
 void dumpNode(const Nodes &nodes, int index, int indent);
+void dumpNodeRaw(const Nodes &nodes, int n);
 
 
 constexpr bool isAlpha(char ch)
@@ -220,7 +242,6 @@ constexpr const ParseState parseCloseTag(ParseState state, const Symbol &sym)
   bool openBracketSlash = state.text;
   if(!openBracketSlash) 
   {
-    
     ParseError("Missing </");
   }
   
