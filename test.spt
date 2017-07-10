@@ -1,0 +1,24 @@
+R"[SPX]
+
+<HTML>
+  <DIV> 
+    Halloo
+  </DIV>
+  
+  <DIV> 
+    Guten tag
+  </DIV>
+  
+  <P> 
+  Hi
+  </P>
+  
+</HTML>
+
+<HTML>
+  <DIV> 
+    Hell
+  </DIV>
+</HTML>
+    
+[SPX]"_html; 
