@@ -2,7 +2,6 @@
 #include <string>
 #include <vector>
 #include <array>
-#include <string_view>
 
 using namespace std;
 
@@ -68,8 +67,8 @@ struct Node
   constexpr Node(const Node &n):
     sibling(n.sibling), child(n.child), tag(n.tag), text(n.text) {}
   
-  constexpr string_view getTag() const {return string_view(tag.pBeg, tag.pEnd - tag.pBeg);};
-  constexpr string_view getText() const {return string_view(text.pBeg, text.pEnd - text.pBeg);};
+  const string getTag() const {return string(tag.pBeg, tag.pEnd - tag.pBeg);};
+  const string getText() const {return string(text.pBeg, text.pEnd - text.pBeg);};
   
   int sibling;
   int child;
@@ -77,6 +76,15 @@ struct Node
   Symbol text;
 };
 
+template<int SIZE>
+struct NodeArray
+{
+  Node nodes[SIZE];
+  constexpr Node& operator[](size_t i) { return nodes[i]; }
+  constexpr const Node& operator[](size_t i) const { return nodes[i]; }
+};
+
+typedef NodeArray<256> Nodes;
 
 // Represents the state of the parser
 struct ParseState
@@ -192,7 +200,7 @@ constexpr const Symbol eatUntil(const char *pszText, char ch)
 }
 
 // Parse "<TAG>", ignores leading whitespace
-constexpr const ParseState parseOpenTag(array<Node, 256> &nodes, ParseState state)
+constexpr const ParseState parseOpenTag(Nodes &nodes, ParseState state)
 {
   // Left trim whitespace
   state.text = eatSpace(state.text);
@@ -245,7 +253,7 @@ constexpr const ParseState parseCloseTag(ParseState state, const Symbol &sym)
 }
 
 // Parses all text content until a "<" is hit 
-constexpr const ParseState parseTagContent(array<Node, 256> &nodes, ParseState state, int iParentIDX)
+constexpr const ParseState parseTagContent(Nodes &nodes, ParseState state, int iParentIDX)
 {
   // make sure we have something
   checkEOS(state.text);
@@ -289,7 +297,7 @@ constexpr bool isCloseTag(const char *p)
 // HTML :: OPENTAG HTML CLOSETAG | TEXT
 // OPENTAG :: "<" TAGNAME ">"
 // CLOSETAG :: "<" TAGNAME "/>"
-constexpr const ParseState parseHTML(array<Node, 256> &nodes, ParseState state, int iParentIDX = 0)
+constexpr const ParseState parseHTML(Nodes &nodes, ParseState state, int iParentIDX = 0)
 {
   // If its an open tag
   if(isOpenTag(state.text))
@@ -343,15 +351,15 @@ constexpr const ParseState parseHTML(array<Node, 256> &nodes, ParseState state, 
 }
 
 
-constexpr array<Node, 256> operator"" _html(const char *pszText, size_t len)
+constexpr Nodes operator"" _html(const char *pszText, size_t len)
 {
-  array<Node, 256> nodes {};
+  Nodes nodes {};
   ParseState state(pszText);
   parseHTML(nodes, state);
   return nodes;
 }
 
-void dumpNode(const array<Node, 256> &nodes, int index, int indent)
+void dumpNode(const Nodes &nodes, int index, int indent)
 {
   const Node &node = nodes[index];
   string sIndent = "\r" + string(indent * 2, ' ');
