@@ -1,5 +1,4 @@
-R"[SPX]
-
+R"*(
 <HTML>
   <DIV> 
     Halloo
@@ -10,9 +9,8 @@ R"[SPX]
   </DIV>
   
   <P> 
-  Hi
+    Hi
   </P>
-  
 </HTML>
 
 <HTML>
@@ -20,5 +18,4 @@ R"[SPX]
     Hell
   </DIV>
 </HTML>
-    
-[SPX]"_html; 
+)*"_html; 
