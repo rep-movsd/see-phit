@@ -44,18 +44,18 @@ produces the following output
 
     <HTML>
       <DIV>
-        <DIV>
-              Halloa
-        </DIV>
-        <DIV>
-              Guten tag
-        </DIV>
-        </P>Hi
+        Halloo
       </DIV>
       <DIV>
-        <DIV>
-              Hell
-        </DIV>
+        Guten tag
+      </DIV>
+      <P>
+        Hi
+      </P>
+    </HTML>
+    <HTML>
+      <DIV>
+        Hell
       </DIV>
     </HTML>
     
