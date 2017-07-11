@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include "tags.hpp"
+
 using namespace std;
 
 // Allow runtime debugging for development
@@ -108,7 +110,6 @@ void ParseError(const char* err);
 void dumpNode(const Nodes &nodes, int index, int indent);
 void dumpNodeRaw(const Nodes &nodes, int n);
 
-
 constexpr bool isAlpha(char ch)
 {
   return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'); 
@@ -204,6 +205,50 @@ constexpr const Symbol eatUntil(const char *pszText, char ch)
   sym.pEnd = pszText;
   while(*sym.pEnd && *sym.pEnd != ch) sym.pEnd++;
   return sym;
+}
+
+constexpr int compare(const char *s1, const char *s2)
+{
+  while(*s1 == *s2) 
+  {
+    // NUL found, were done
+    if(!*s1)
+    {
+      return 0;
+    }
+    
+    s1++;
+    s2++;
+  }  
+  
+  return *s1 < *s2 ? -1 : 1;
+}
+
+constexpr int findTag(const char *tag)
+{
+  int left = 0;
+  int right = sizeof(tags) / sizeof(tags[0]);
+  
+  while(left < right)
+  {
+    int mid = (left + right) / 2;
+    int cmp = compare(tag, tags[mid]);
+    
+    if(cmp > 0)
+    {
+      left = mid + 1;
+    }
+    else if(cmp < 0)
+    {
+      right = mid;
+    }
+    else
+    {
+      return mid;
+    }
+  }
+  
+  return -1;
 }
 
 // Parse "<TAG>", ignores leading whitespace
