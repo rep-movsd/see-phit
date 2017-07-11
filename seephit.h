@@ -29,6 +29,7 @@ constexpr DummyOutStream DummyOut;
 struct Symbol
 {
   constexpr Symbol(): pBeg(), pEnd() {}
+  constexpr int len() const { return pEnd - pBeg;}
   const char *pBeg;
   const char *pEnd;
 };
@@ -207,24 +208,38 @@ constexpr const Symbol eatUntil(const char *pszText, char ch)
   return sym;
 }
 
-constexpr int compare(const char *s1, const char *s2)
+constexpr char toUpper(char ch)
 {
-  while(*s1 == *s2) 
+  if(ch >= 'a' && ch <= 'z')
+  {
+    return ch + 'A' - 'a';
+  }
+  
+  return ch;
+}
+
+// Compare s1 and s2 (upto len characters if specified)
+constexpr int cmpUpperCase(const char *s1, const char *s2, int len=0)
+{
+  int n = 1;
+  while(toUpper(*s1) == toUpper(*s2)) 
   {
     // NUL found, were done
-    if(!*s1)
+    if(!*s1 || !*s2 || (len && n == len))
     {
       return 0;
     }
     
     s1++;
     s2++;
+    ++n;
   }  
   
-  return *s1 < *s2 ? -1 : 1;
+  return toUpper(*s1) < toUpper(*s2) ? -1 : 1;
 }
 
-constexpr int findTag(const char *tag)
+// Checks if tag[0..len) matches any entry in the tags array
+constexpr int findTag(const char *tag, int len)
 {
   int left = 0;
   int right = sizeof(tags) / sizeof(tags[0]);
@@ -232,7 +247,7 @@ constexpr int findTag(const char *tag)
   while(left < right)
   {
     int mid = (left + right) / 2;
-    int cmp = compare(tag, tags[mid]);
+    int cmp = cmpUpperCase(tag, tags[mid], len);
     
     if(cmp > 0)
     {
@@ -269,6 +284,10 @@ constexpr const ParseState parseOpenTag(Nodes &nodes, ParseState state)
   nodes[state.iFree].tag = eatAlpha(state.text);
   state.text = nodes[state.iFree].tag.pEnd;
   state.text = eatRaw(state.text, ">");
+  
+  const Symbol &sym = nodes[state.iFree].tag;
+  if(findTag(sym.pBeg, sym.len()) == -1)
+    ParseError("Unknown tag name");
   
   bool closeBracket = state.text;
   if(!closeBracket) ParseError("Missing >");
