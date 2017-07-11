@@ -300,8 +300,10 @@ constexpr bool isCloseTag(const char *p)
   return false;
 }
 
-// HTML :: OPENTAG HTML CLOSETAG | TEXT
-// OPENTAG :: "<" TAGNAME ">"
+// HTML     :: TAG | HTML TAG
+// TAG      :: OPENTAG CONTENT CLOSETAG
+// CONTENT  :: HTML | TEXT 
+// OPENTAG  :: "<" TAGNAME ">"
 // CLOSETAG :: "<" TAGNAME "/>"
 constexpr const ParseState parseHTML(Nodes &nodes, ParseState state, int iParentIDX)
 {
