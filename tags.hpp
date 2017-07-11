@@ -1,7 +1,26 @@
 #ifndef SEE_PHIT_TAGS_HPP
 #define SEE_PHIT_TAGS_HPP
 
-constexpr const char *tags[] = {
+constexpr const char* arrVoidTags[] = 
+{
+  "area", 
+  "base", 
+  "br", 
+  "col", 
+  "command", 
+  "hr", 
+  "img", 
+  "input", 
+  "keygen", 
+  "link",
+  "meta", 
+  "param", 
+  "source"
+};
+
+
+constexpr const char *arrTags[] = 
+{
   "a",
   "abbr",
   "acronym",

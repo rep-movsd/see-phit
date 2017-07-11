@@ -3,11 +3,6 @@
 
 using namespace std;
 
-void ParseError(const char* err)
-{
-  cerr << "Parse error - " << err << endl;
-}
-
 
 void dumpNode(const Nodes &nodes, int index, int indent)
 {
@@ -23,7 +18,12 @@ void dumpNode(const Nodes &nodes, int index, int indent)
   {
     cerr << node.getText();
   }
-  cerr << "</" << node.getTag() << ">" << endl;
+  
+  // Skip close tag for void tags
+  if(node.getTag().back() != '/')
+  {
+    cerr << "</" << node.getTag() << ">" << endl;
+  }
   
   if(node.sibling > -1)
   {

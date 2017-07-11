@@ -4,12 +4,17 @@
 
 using namespace std;
 
+//#define SPT_DEBUG 1
+
 // Allow runtime debugging for development
 #ifdef SPT_DEBUG
 
 #define constexpr 
 #define DUMP cerr
 #define ENDL "\n"
+
+// Dummy function to prettify compile-time errors
+void ParseError(const char* err) {cerr << "Parse Error:" << err << endl;}
 
 #else
 
@@ -22,6 +27,9 @@ struct DummyOutStream
 };
 
 constexpr DummyOutStream DummyOut;
+
+// Dummy function to prettify compile-time errors
+void ParseError(const char* err);
 
 #endif
 
@@ -105,8 +113,6 @@ struct ParseState
   constexpr int pos() {return text - start;}
 };
 
-// Dummy function to prettify compile-time errors
-void ParseError(const char* err);
 
 void dumpNode(const Nodes &nodes, int index, int indent);
 void dumpNodeRaw(const Nodes &nodes, int n);
@@ -218,36 +224,31 @@ constexpr char toUpper(char ch)
   return ch;
 }
 
-// Compare s1 and s2 (upto len characters if specified)
-constexpr int cmpUpperCase(const char *s1, const char *s2, int len=0)
+// Compare s1 and s2
+// assumes s2 has a NUL terminator, but s1 may not
+constexpr int cmpUpperCase(const char *s1, const char *s2)
 {
-  int n = 1;
   while(toUpper(*s1) == toUpper(*s2)) 
   {
-    // NUL found, were done
-    if(!*s1 || !*s2 || (len && n == len))
-    {
-      return 0;
-    }
-    
     s1++;
     s2++;
-    ++n;
   }  
+  
+  if(!*s2) return 0;
   
   return toUpper(*s1) < toUpper(*s2) ? -1 : 1;
 }
 
 // Checks if tag[0..len) matches any entry in the tags array
-constexpr int findTag(const char *tag, int len)
+constexpr int findTag(const char *const tags[], int nTags, const char *tag)
 {
   int left = 0;
-  int right = sizeof(tags) / sizeof(tags[0]);
+  int right = nTags;
   
   while(left < right)
   {
     int mid = (left + right) / 2;
-    int cmp = cmpUpperCase(tag, tags[mid], len);
+    int cmp = cmpUpperCase(tag, tags[mid]);
     
     if(cmp > 0)
     {
@@ -282,13 +283,38 @@ constexpr const ParseState parseOpenTag(Nodes &nodes, ParseState state)
   
   // Try to parse an [a-z]+ as a tag then the closing ">"
   nodes[state.iFree].tag = eatAlpha(state.text);
-  state.text = nodes[state.iFree].tag.pEnd;
-  state.text = eatRaw(state.text, ">");
   
-  const Symbol &sym = nodes[state.iFree].tag;
-  if(findTag(sym.pBeg, sym.len()) == -1)
+  Symbol &sym = nodes[state.iFree].tag;
+  state.text = sym.pEnd;
+  
+  // Check if valid tag
+  const int nTags = sizeof(arrTags)/sizeof(arrTags[0]);
+  if(findTag(arrTags, nTags, sym.pBeg) == -1)
+  {
     ParseError("Unknown tag name");
+  }
   
+  //DUMP << "Parsed tag " << string(sym.pBeg, sym.pEnd) << ENDL;
+  
+  // Check if void tag
+  const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
+  const int idx = findTag(arrVoidTags, nVoidTags, sym.pBeg);
+  DUMP << "void tag index " << idx << " sym len " << sym.len() << ENDL;
+  
+  
+  if(idx != -1)
+  {
+    // Void tag, add the "/" too
+    state.text = eatRaw(state.text, "/");
+    bool voidTag = state.text;
+    if(!voidTag) ParseError("Missing / on a void tag");
+
+    // Bump up the symbol end, so the parser can check for a trailing / and not look for a close tag
+    sym.pEnd++;
+  }
+
+  // Grab the final >
+  state.text = eatRaw(state.text, ">");
   bool closeBracket = state.text;
   if(!closeBracket) ParseError("Missing >");
   
@@ -401,11 +427,15 @@ constexpr const ParseState parseHTML(Nodes &nodes, ParseState state, int iParent
         }
       }
       
-      // Recursively parse the content inside
-      state = parseHTML(nodes, state, iCurIdx);
-      
-      // Parse the close tag
-      state = parseCloseTag(state, symTag);
+      // If this is a void tag, no need to parse children or close tag
+      if(symTag.pEnd[-1] != '/')
+      {
+        // Recursively parse the content inside
+        state = parseHTML(nodes, state, iCurIdx);
+        
+        // Parse the close tag
+        state = parseCloseTag(state, symTag);
+      }
     }
     while(isOpenTag(state.text));
   }
