@@ -18,6 +18,7 @@ R"*(
   </DIV>
   
   <P>Inline tag</P>
+  <Span>Mixed case tag name</SPAN>
 
 </HTML>
 

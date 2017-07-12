@@ -1,16 +1,7 @@
 R"*(
 < HTML>
   <DIV> 
-    Halloo
+    Space after open angle bracket
   </DIV>
-  
-  <DIV> 
-    Guten tag
-  </DIV >
-  <IMG/>
-  <IMG/>
-  <P> 
-    Hi
-  </P>
 </HTML>  
 )*"_html; 

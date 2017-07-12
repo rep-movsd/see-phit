@@ -1,22 +1,6 @@
 R"*(
 <HTML>
-  <DIV> 
-    Halloo
-  </DIV>
-  
-  <DIV> 
-    Guten tag
-  </DIV>
-  <IMG/>
+  <P> Space before void tag close angle bracket</P>
   <IMG/ >
-  <P> 
-    Hi
-  </P>
-</HTML>
-
-<HTML>
-  <DIV> 
-    Hell
-  </DIV>
 </HTML>
 )*"_html; 
