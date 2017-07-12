@@ -18,10 +18,11 @@ done
 for i in *.spt; 
 do 
   printf "${NC}$i\n"
-  g++ -I.. -c --std=c++14 $i.cpp ../seephit.cpp 2>&1 >/dev/null | grep ParseError\(\" > $i.err
+  g++ -I.. -S --std=c++14 $i.cpp ../seephit.cpp 2>&1 >/dev/null | grep ParseError\(\" > $i.err
 done
 
 rm *.cpp
+rm *.s
 
 echo
 printf "${BLUE}Checking expected compiler output\n"

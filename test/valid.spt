@@ -1,6 +1,5 @@
 R"*(
-<HTML>
-  
+<DIV>
   <DIV > 
     Extra whitespace after close and open tags
   </DIV  >
@@ -20,11 +19,11 @@ R"*(
   <P>Inline tag</P>
   <Span>Mixed case tag name</SPAN>
 
-</HTML>
+</DIV>
 
-<HTML>
+<DIV>
   <DIV> 
     Multiple top level nodes
   </DIV>
-</HTML>
+</DIV>
 )*"_html; 

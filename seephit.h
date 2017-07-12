@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include <algorithm>
+#include <vector>
 #include "tags.hpp"
 
 using namespace std;
@@ -31,6 +33,20 @@ constexpr DummyOutStream DummyOut;
 void ParseError(const char* err);
 
 #endif
+
+constexpr char toUpper(char ch)
+{
+  if(ch >= 'a' && ch <= 'z')
+  {
+    return ch + 'A' - 'a';
+  }
+  return ch;
+}
+
+constexpr bool isSpace(char ch)
+{
+  return ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t';
+}
 
 
 struct Symbol
@@ -82,8 +98,26 @@ struct Node
   constexpr Node(const Node &n):
   sibling(n.sibling), child(n.child), tag(n.tag), text(n.text) {}
   
-  const string getTag() const {return string(tag.pBeg, tag.pEnd - tag.pBeg);};
-  const string getText() const {return string(text.pBeg, text.pEnd - text.pBeg);};
+  // returns the tag in uppercase
+  const string getTag() const 
+  {
+    string ret(tag.pBeg, tag.pEnd - tag.pBeg);
+    transform(begin(ret), end(ret), begin(ret), toUpper);
+    return ret;
+  };
+  
+  // Returns the text content, optionally stripping leading and trailing space
+  const string getText(bool trim = false) const 
+  {
+    auto b = text.pBeg, e = text.pEnd;
+    if(trim && b != e)
+    {
+      while(isSpace(*b)) b++;
+      while(e >= b && isSpace(e[-1])) e--;
+    }
+    
+    return string(b, e);
+  };
   
   int sibling;
   int child;
@@ -100,6 +134,71 @@ struct NodeArray
 };
 
 typedef NodeArray<256> Nodes;
+
+struct SPTNode
+{
+  vector<SPTNode> children;
+  string tag, text;
+  
+  SPTNode(const string &tag, const string &text) : tag(tag), text(text) {}
+
+  static SPTNode from(const Nodes &nodes)
+  {
+    SPTNode root("HTML", "");
+    build(root, nodes, 0);
+    return root;
+  }
+  
+  void dump(ostream &ostr, int indent = 0) const
+  {
+    string sIndent = string(indent * 2, ' ');
+    ostr << sIndent << "<" << tag << ">";
+
+    if(children.size()) 
+    {
+      ostr << "\n";
+    }
+    
+    for(const auto& child: children)
+    {
+      child.dump(ostr, indent + 1);
+    }
+    
+    // Skip text and close tag for void tags
+    if(tag.back() != '/')
+    {
+      if(text.length())
+      {
+        ostr << "\n" << sIndent << text << "\n";
+      }
+      ostr << sIndent << "</" << tag << ">" << "\n";
+    }
+    else
+    {
+      ostr << "\n";
+    }
+  }
+  
+private:
+  static void build(SPTNode &parent, const Nodes &nodes, int index)
+  {
+    const Node &node = nodes[index];
+    auto &tag = node.getTag();
+    auto &text = node.getText(tag != "PRE");
+    parent.children.emplace_back(SPTNode(tag, text));
+    
+    if(node.child > -1)
+    {
+      build(parent.children.back(), nodes, node.child);
+    }
+    
+    if(node.sibling > -1)
+    {
+      build(parent, nodes, node.sibling);
+    }
+  }
+};
+
 
 struct SPT 
 {
@@ -171,6 +270,22 @@ constexpr bool isAlpha(char ch)
   return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'); 
 }
 
+// Compare s1 and s2
+// assumes s2 has a NUL terminator, but s1 may not
+constexpr int cmpUpperCase(const char *s1, const char *s2)
+{
+  while(toUpper(*s1) == toUpper(*s2)) 
+  {
+    s1++;
+    s2++;
+  }  
+  
+  if(!*s2) return 0;
+  
+  return toUpper(*s1) < toUpper(*s2) ? -1 : 1;
+}
+
+
 // Raises compiletime error if no more characters left to parse
 constexpr const char *checkEOS(const char *pszText)
 {
@@ -183,7 +298,7 @@ constexpr const char *checkEOS(const char *pszText)
 // Takes a string literal and returns pointer to first non-whitespace character
 constexpr const char *eatSpace(const char *pszText)
 {
-  while(*pszText == ' ' || *pszText == '\n' || *pszText == '\r' || *pszText == '\t')
+  while(isSpace(*pszText))
   {
     ++pszText;
   }
@@ -221,7 +336,7 @@ constexpr const char *eatSym(const char *pszText, const Symbol &sym)
   auto p = sym.pBeg;
   while(p != sym.pEnd)
   {
-    if(*p != *pszText) return nullptr;    
+    if(toUpper(*p) != toUpper(*pszText)) return nullptr;    
     ++p;
     ++pszText;
     
@@ -269,31 +384,6 @@ constexpr const Symbol eatUntil(const char *pszText, char ch, const bool *unExpe
   }
   
   return sym;
-}
-
-constexpr char toUpper(char ch)
-{
-  if(ch >= 'a' && ch <= 'z')
-  {
-    return ch + 'A' - 'a';
-  }
-  
-  return ch;
-}
-
-// Compare s1 and s2
-// assumes s2 has a NUL terminator, but s1 may not
-constexpr int cmpUpperCase(const char *s1, const char *s2)
-{
-  while(toUpper(*s1) == toUpper(*s2)) 
-  {
-    s1++;
-    s2++;
-  }  
-  
-  if(!*s2) return 0;
-  
-  return toUpper(*s1) < toUpper(*s2) ? -1 : 1;
 }
 
 // Checks if tag[0..len) matches any entry in the tags array
@@ -361,10 +451,11 @@ constexpr const ParseState parseOpenTag(Nodes &nodes, ParseState state)
   // Check if void tag
   const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
   const int idx = findTag(arrVoidTags, nVoidTags, sym.pBeg);
-  DUMP << "void tag index " << idx << " sym len " << sym.len() << ENDL;
   
   if(idx != -1)
   {
+    DUMP << "Parsed void tag : index " << idx << " sym len " << sym.len() << ENDL;
+    
     // Void tag, add the "/" too
     state.text = eatSpace(state.text);
     state.text = eatRaw(state.text, "/");

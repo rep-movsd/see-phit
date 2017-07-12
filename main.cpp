@@ -1,24 +1,20 @@
 #include <iostream>
+
 #include "seephit.h"
 using namespace std;
+
 
 int main()
 {
   
-  /* */
   constexpr auto nodes = 
-  #include "test.spt" 
+  #include "test/valid.spt" 
   
-  dumpNode(nodes, 0, 0);
+  SPTNode root = SPTNode::from(nodes);
+  root.dump(cerr);
+  
+  //SPT::dumpNode(nodes, 0, 0);
 
-  /* * /
-  #define TEST(X)   cout << X << "->" << findTag(X) << endl;
   
-  TEST("aaaa");
-  TEST("a");
-  TEST("div");
-  TEST("xmp");
-  TEST("xxxx");
-  /* */
 }
 
