@@ -24,6 +24,10 @@ void dumpNode(const Nodes &nodes, int index, int indent)
   {
     cerr << "</" << node.getTag() << ">" << endl;
   }
+  else
+  {
+    cerr << endl;
+  }
   
   if(node.sibling > -1)
   {

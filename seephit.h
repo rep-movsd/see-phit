@@ -281,11 +281,13 @@ constexpr const ParseState parseOpenTag(Nodes &nodes, ParseState state)
     ParseError("Missing <");
   }
   
+  state.text = eatSpace(state.text);
+  
   // Try to parse an [a-z]+ as a tag then the closing ">"
   nodes[state.iFree].tag = eatAlpha(state.text);
   
   Symbol &sym = nodes[state.iFree].tag;
-  state.text = sym.pEnd;
+  state.text = eatSpace(sym.pEnd);
   
   // Check if valid tag
   const int nTags = sizeof(arrTags)/sizeof(arrTags[0]);
@@ -305,12 +307,15 @@ constexpr const ParseState parseOpenTag(Nodes &nodes, ParseState state)
   if(idx != -1)
   {
     // Void tag, add the "/" too
+    state.text = eatSpace(state.text);
     state.text = eatRaw(state.text, "/");
+    
+    // Bump up the symbol end, so the parser can check for a trailing / and not look for a close tag
+    sym.pEnd = state.text;
+
     bool voidTag = state.text;
     if(!voidTag) ParseError("Missing / on a void tag");
 
-    // Bump up the symbol end, so the parser can check for a trailing / and not look for a close tag
-    sym.pEnd++;
   }
 
   // Grab the final >
@@ -340,6 +345,8 @@ constexpr const ParseState parseCloseTag(ParseState state, const Symbol &sym)
   bool matchTag = state.text;
   if(!matchTag) ParseError("Mismatched tag name after </");
   
+  // Ignore space, parse >
+  state.text = eatSpace(state.text);
   state.text = eatRaw(state.text, ">");
   bool closeBracket = state.text;
   if(!closeBracket) ParseError("Missing >");
@@ -372,7 +379,8 @@ constexpr bool isOpenTag(const char *p)
   p = eatSpace(p);
   if(*p && *p++ == '<')
   {
-    return isAlpha(*p);
+    p = eatSpace(p);
+    return *p && isAlpha(*p);
   }
   return false;
 }

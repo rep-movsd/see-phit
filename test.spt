@@ -1,13 +1,14 @@
 R"*(
-<HTML>
-  <DIV> 
+< HTML>
+  <DIV > 
     Halloo
   </DIV>
   
-  <DIV> 
+  < DIV > 
     Guten tag
-  </DIV>
-  <IMG/>
+  </DIV >
+  < IMG/>
+  < IMG />
   <P> 
     Hi
   </P>
