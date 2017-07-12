@@ -1,0 +1,16 @@
+R"*(
+< HTML>
+  <DIV> 
+    Halloo
+  </DIV>
+  
+  <DIV> 
+    Guten tag
+  </DIV >
+  <IMG/>
+  <IMG/>
+  <P> 
+    Hi
+  </P>
+</HTML>  
+)*"_html; 

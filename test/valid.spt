@@ -1,0 +1,29 @@
+R"*(
+<HTML>
+  
+  <DIV > 
+    Extra whitespace after close and open tags
+  </DIV  >
+  
+  <DIV> 
+    Extra space after void tag
+  </DIV>
+  <IMG />
+
+  <DIV> 
+    <DIV> 
+      Nested tag, void tag
+    </DIV>
+    <IMG/>
+  </DIV>
+  
+  <P>Inline tag</P>
+
+</HTML>
+
+<HTML>
+  <DIV> 
+    Multiple top level nodes
+  </DIV>
+</HTML>
+)*"_html; 
