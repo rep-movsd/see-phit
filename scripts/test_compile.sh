@@ -18,9 +18,11 @@ done
 for i in *.spt; 
 do
   printf "${NC}$i\n"
-  g++ -I.. -S --std=c++14 $i.cpp &> $i.err
-  if [ -n "$(grep ParseError\(\" $i.err)" ] ; then
-    echo $(cat $i.err | grep ParseError\(\") > $i.err
+  g++ -I.. -S --std=c++14 $i.cpp &> /tmp/$i.err
+  if (grep "ParseError(\"" /tmp/$i.err > /tmp/$i.perr); then
+    mv /tmp/$i.perr ./$i.err
+  else
+    mv /tmp/$i.err ./$i.err
   fi
 done
 
@@ -36,10 +38,13 @@ do
   if [ ! -f $i.expected ]; then
     printf "${NC}$i - ${RED}Test file $i.expected not found\n"
   else
+    
     if ! (diff $i.err $i.expected) > /dev/null ; then
-      printf "${NC}$i - ${RED}Failed\n"
+      ERR=$(grep "error:" $i.err)
+      printf "${NC}$i - ${RED}Failed: $ERR\n"
     else
-      printf "${NC}$i - ${BLUE}Passed\n"
+      ERR=$(grep ParseError $i.err|xargs)
+      printf "${NC}$i - ${BLUE}Passed: $ERR\n"
       rm $i.err
     fi
   fi
