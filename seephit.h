@@ -56,7 +56,12 @@ struct Symbol
   const char *pBeg;
   const char *pEnd;
   
+#ifdef SPT_DEBUG
   string getText() const { return string(pBeg, pEnd); }
+#else
+  constexpr int getText() const { return 0; }
+#endif
+
 };
 
 /*
@@ -446,8 +451,6 @@ constexpr const ParseState parseOpenTag(Nodes &nodes, ParseState state)
     ParseError("Unknown tag name");
   }
   
-  //DUMP << "Parsed tag " << string(sym.pBeg, sym.pEnd) << ENDL;
-  
   // Check if void tag
   const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
   const int idx = findTag(arrVoidTags, nVoidTags, sym.pBeg);
@@ -491,23 +494,24 @@ constexpr const ParseState parseOpenTag(Nodes &nodes, ParseState state)
 // Attempts to parse "</TAG>" given "TAG"
 constexpr const ParseState parseCloseTag(ParseState state, const Symbol &sym)
 {
-  DUMP << "Parsing close tag ..." << ENDL;
+  DUMP << "Parsing close tag for ... " << sym.getText() << ENDL;
 
   // Try to parse the "</"
   state.text = eatRaw(state.text, "</");
   bool openBracketSlash = state.text;
   if(!openBracketSlash) 
   {
-    ParseError("Missing </");
+    ParseError("Expecting a close tag");
   }
   
   // Try to parse the tag name then the closing ">"
-  state.text = eatSym(state.text, sym);
-  bool matchTag = !isAlpha(*state.text);
+  auto p = eatSym(state.text, sym);
+  bool matchTag = p && !isAlpha(*p);
   if(!matchTag) 
   {
     ParseError("Mismatched tag name after </");
   }
+  state.text = p;
   
   // Ignore space, parse >
   state.text = eatSpace(state.text);
@@ -597,8 +601,6 @@ constexpr const ParseState parseHTML(Nodes &nodes, ParseState state, int iParent
       state = parseOpenTag(nodes, state);
       const Symbol symTag = nodes[iCurIdx].tag;
       
-      //DUMP << symTag.getText() << ENDL;
-      
       // Second sibling onwards
       if(++nSiblings > 1)
       {
@@ -617,8 +619,6 @@ constexpr const ParseState parseHTML(Nodes &nodes, ParseState state, int iParent
       // If this is a void tag, no need to parse children or close tag
       if(symTag.pEnd[-1] != '/')
       {
-        DUMP << "Found nested tag ..." << ENDL;
-        
         // Recursively parse the content inside
         state = parseHTML(nodes, state, iCurIdx);
         
@@ -634,8 +634,6 @@ constexpr const ParseState parseHTML(Nodes &nodes, ParseState state, int iParent
   }
   else // Has to be text content
   {
-    DUMP << iParentIDX << ENDL;
-    
     if(iParentIDX == -1)
     {
       ParseError("Expecting an open tag at top level");

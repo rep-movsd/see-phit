@@ -1,1 +1,1 @@
-     ParseError("Missing </");
+     ParseError("Expecting a close tag");
