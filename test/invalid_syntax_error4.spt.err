@@ -1,0 +1,1 @@
+if(eos) ParseError("Unexpected end of stream"); if(empty_tag) ParseError("Expecting an identifier"); ParseError("Unexpected character inside tag content"); ParseError("Missing <"); ParseError("Missing </"); ParseError("Expecting a tag name after <"); ParseError("Expecting an open tag at top level");
