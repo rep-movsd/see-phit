@@ -10,7 +10,7 @@ int main()
   constexpr auto parser =
   #include "${file}" 
   
-  SPTNode root = SPTNode::from(parser.nodes);
+  SPTNode root = SPTNode::from(parser);
   root.dump(cerr);
   
 }

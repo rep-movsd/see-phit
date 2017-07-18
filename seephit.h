@@ -2,6 +2,8 @@
 #include <string>
 #include <algorithm>
 #include <vector>
+#include <map>
+#include <utility>
 #include <iostream>
 #include "tags.hpp"
 
@@ -104,6 +106,9 @@ struct Array
   constexpr const T& operator[](size_t i) const { return nodes[i]; }
   size_t size = 0;
   const size_t capacity = SIZE;
+  
+  constexpr T& back() { return nodes[size]; }
+  constexpr bool add() { return ++size < capacity;}
 };
 
 struct Attr 
@@ -189,69 +194,6 @@ struct Node
 typedef Array<Attr, 256> Attrs;
 typedef Array<Node, 1024> Nodes;
 
-struct SPTNode
-{
-  vector<SPTNode> children;
-  string tag, text;
-  
-  SPTNode(const string &tag, const string &text) : tag(tag), text(text) {}
-  
-  static SPTNode from(const Nodes &nodes)
-  {
-    SPTNode root("HTML", "");
-    build(root, nodes, 0);
-    return root;
-  }
-  
-  void dump(ostream &ostr, int indent = 0) const
-  {
-    string sIndent = string(indent * 2, ' ');
-    ostr << sIndent << "<" << tag << ">";
-    
-    if(children.size()) 
-    {
-      ostr << "\n";
-    }
-    
-    for(const auto& child: children)
-    {
-      child.dump(ostr, indent + 1);
-    }
-    
-    // Skip text and close tag for void tags
-    if(tag.back() != '/')
-    {
-      if(text.length())
-      {
-        ostr << "\n" << sIndent << text << "\n";
-      }
-      ostr << sIndent << "</" << tag << ">" << "\n";
-    }
-    else
-    {
-      ostr << "\n";
-    }
-  }
-  
-private:
-  static void build(SPTNode &parent, const Nodes &nodes, int index)
-  {
-    const Node &node = nodes[index];
-    auto &tag = node.getTag();
-    auto &text = node.getText(tag != "PRE");
-    parent.children.emplace_back(SPTNode(tag, text));
-    
-    if(node.child > -1)
-    {
-      build(parent.children.back(), nodes, node.child);
-    }
-    
-    if(node.sibling > -1)
-    {
-      build(parent, nodes, node.sibling);
-    }
-  }
-};
 
 struct SPT 
 {
@@ -378,21 +320,82 @@ constexpr int findTag(const char *const tags[], int nTags, const char *tag)
 // Represents the state of the parser
 struct SPTParser
 {
-  const char *pszText;  // Position in the stream
-  const char *start;
-  size_t iFreeNode;     // Index of next free node
-  size_t iFreeAttr;     // Index of next free attribute
   Nodes nodes;
   Attrs attrs;
   
-  constexpr SPTParser(const char *pszText): pszText(pszText), start(pszText), iFreeNode(), iFreeAttr() {}
-  constexpr SPTParser(): pszText(), start(), iFreeNode(), iFreeAttr() {}
+  constexpr SPTParser(const char *pszText): pszText(pszText), start(pszText) {}
+  constexpr SPTParser(): pszText(), start() {}
   
-  // Return current node
-  constexpr Node &node() {return nodes[iFreeNode];}
+  // HTML     :: TAG | HTML TAG
+  // TAG      :: OPENTAG CONTENT CLOSETAG
+  // CONTENT  :: HTML | TEXT 
+  // OPENTAG  :: "<" TAGNAME ">"
+  // CLOSETAG :: "<" TAGNAME "/>"
+  constexpr const void parseHTML(int iParentIDX)
+  {
+    // If its an open tag
+    if(isOpenTag())
+    {
+      DUMP << "Found open tag ..." << ENDL;
+      
+      // This next parsed nodes index will be the next free one, save it
+      int nYoungestSibling = nodes.size;
+      int nSiblings = 0;
+      
+      // Keep doing this in a loop
+      do
+      {
+        // Parse the open tag
+        int iCurIdx = nodes.size;
+        parseOpenTag();
+        const Symbol symTag = nodes[iCurIdx].tag;
+        
+        // Second sibling onwards
+        if(++nSiblings > 1)
+        {
+          // Set elder siblings sibling index to this one, this becomes the youngest
+          nodes[nYoungestSibling].sibling = iCurIdx;
+          nYoungestSibling = iCurIdx;
+        }
+        else // First child, set the parents child index to this if parent exists
+        {
+          if(iParentIDX >= 0)
+          {
+            nodes[iParentIDX].child = iCurIdx;
+          }
+        }
+        
+        // If this is a void tag, no need to parse children or close tag
+        if(symTag.pEnd[-1] != '/')
+        {
+          // Recursively parse the content inside
+          parseHTML(iCurIdx);
+          
+          // Parse the close tag
+          parseCloseTag(symTag);
+        }
+        else // eat up any whitespace
+        {
+          eatSpace();
+        }
+      }
+      while(isOpenTag());
+    }
+    else // Has to be text content
+    {
+      if(iParentIDX == -1)
+      {
+        PARSE_ERR("Expecting an open tag at top level");
+      }
+      
+      parseTagContent(iParentIDX);
+    }
+  }
   
-  // Return current attr
-  constexpr Attr &attr() {return attrs[iFreeAttr];}
+  
+private:
+  const char *pszText;  // Position in the stream
+  const char *start;
   
   // Return line number of current poistion
   constexpr int curLine() const
@@ -409,24 +412,23 @@ struct SPTParser
   // Advances the free node pointer with bounds check
   constexpr void newNode() 
   { 
-    if(iFreeNode == nodes.capacity)
+    if(!nodes.add())
     {
       PARSE_ERR("Too many nodes");
     }
-    ++iFreeNode; 
   } 
   
   // Advances the free attr pointer with bounds check, associates new attr with the current ndoe
-  constexpr void newAttr() 
+  constexpr Attr &newAttr() 
   { 
-    if(iFreeAttr == attrs.capacity)
+    if(!attrs.add())
     {
       PARSE_ERR("Too many attributes");
     }
-    ++iFreeAttr; 
     
     // Link the attribute to the node
-    attr().iNode = iFreeNode;
+    attrs.back().iNode = nodes.size;
+    return attrs.back();
   } 
   
   // Raises compiletime error if no more characters left to parse
@@ -578,12 +580,14 @@ struct SPTParser
   // NAME is a sequence of [a-z\-] and VALUE is "text", 'text' or {text}
   constexpr void parseAttr()
   {
+    Attr &attr = newAttr();
+    
     // Swallow any space
     eatSpace();
     checkEOS();
     
     // Grab the name 
-    attr().name = eatAlpha(isAttr);
+    attr.name = eatAlpha(isAttr);
     
     if(!eatRaw("="))
     {
@@ -609,7 +613,7 @@ struct SPTParser
         PARSE_ERR("Expecting open quote or '{' for attribute value");
     }
     
-    attr().value = eatUntil(close, nullptr);
+    attr.value = eatUntil(close, nullptr);
     checkEOS();
     
     // Eat the close delim
@@ -637,7 +641,7 @@ struct SPTParser
     }
     
     // Try to parse an [a-z]+ as a tag then the closing ">"
-    Symbol &sym = node().tag = eatAlpha(isAlpha);
+    Symbol &sym = nodes.back().tag = eatAlpha(isAlpha);
     
     // Eat any trailing whitespace
     eatSpace();
@@ -650,6 +654,7 @@ struct SPTParser
     }
     
     // Parse attributes
+    //parseAttr()
     
     // Check if void tag
     const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
@@ -731,71 +736,6 @@ struct SPTParser
     checkEOS();
   }
   
-  // HTML     :: TAG | HTML TAG
-  // TAG      :: OPENTAG CONTENT CLOSETAG
-  // CONTENT  :: HTML | TEXT 
-  // OPENTAG  :: "<" TAGNAME ">"
-  // CLOSETAG :: "<" TAGNAME "/>"
-  constexpr const void parseHTML(int iParentIDX)
-  {
-    // If its an open tag
-    if(isOpenTag())
-    {
-      DUMP << "Found open tag ..." << ENDL;
-      
-      // This next parsed nodes index will be the next free one, save it
-      int nYoungestSibling = iFreeNode;
-      int nSiblings = 0;
-      
-      // Keep doing this in a loop
-      do
-      {
-        // Parse the open tag
-        int iCurIdx = iFreeNode;
-        parseOpenTag();
-        const Symbol symTag = nodes[iCurIdx].tag;
-        
-        // Second sibling onwards
-        if(++nSiblings > 1)
-        {
-          // Set elder siblings sibling index to this one, this becomes the youngest
-          nodes[nYoungestSibling].sibling = iCurIdx;
-          nYoungestSibling = iCurIdx;
-        }
-        else // First child, set the parents child index to this if parent exists
-        {
-          if(iParentIDX >= 0)
-          {
-            nodes[iParentIDX].child = iCurIdx;
-          }
-        }
-        
-        // If this is a void tag, no need to parse children or close tag
-        if(symTag.pEnd[-1] != '/')
-        {
-          // Recursively parse the content inside
-          parseHTML(iCurIdx);
-          
-          // Parse the close tag
-          parseCloseTag(symTag);
-        }
-        else // eat up any whitespace
-        {
-          eatSpace();
-        }
-      }
-      while(isOpenTag());
-    }
-    else // Has to be text content
-    {
-      if(iParentIDX == -1)
-      {
-        PARSE_ERR("Expecting an open tag at top level");
-      }
-      
-      parseTagContent(iParentIDX);
-    }
-  }
 };
 
 
@@ -806,3 +746,75 @@ constexpr SPTParser operator"" _html(const char *pszText, size_t)
   return parser;
 }
 
+
+struct SPTNode
+{
+  vector<SPTNode> children;
+  string tag, text;
+  
+  SPTNode(const string &tag, const string &text) : tag(tag), text(text) {}
+  
+  static SPTNode from(const SPTParser &parser)
+  {
+    map<int, SPTNode*> dctNodes;
+    SPTNode root("HTML", "");
+    build(root, parser.nodes, 0, dctNodes);
+    
+    for(int n = 0; n < parser.attrs.size; ++n)
+    {
+      
+    }
+    
+    return root;
+  }
+  
+  void dump(ostream &ostr, int indent = 0) const
+  {
+    string sIndent = string(indent * 2, ' ');
+    ostr << sIndent << "<" << tag << ">";
+    
+    if(children.size()) 
+    {
+      ostr << "\n";
+    }
+    
+    for(const auto& child: children)
+    {
+      child.dump(ostr, indent + 1);
+    }
+    
+    // Skip text and close tag for void tags
+    if(tag.back() != '/')
+    {
+      if(text.length())
+      {
+        ostr << "\n" << sIndent << text << "\n";
+      }
+      ostr << sIndent << "</" << tag << ">" << "\n";
+    }
+    else
+    {
+      ostr << "\n";
+    }
+  }
+  
+private:
+  static void build(SPTNode &parent, const Nodes &nodes, int index, map<int, SPTNode*> &dctNodes)
+  {
+    const Node &node = nodes[index];
+    auto &tag = node.getTag();
+    auto &text = node.getText(tag != "PRE");
+    parent.children.emplace_back(SPTNode(tag, text));
+    dctNodes[index] = &parent.children.back(); 
+    
+    if(node.child > -1)
+    {
+      build(parent.children.back(), nodes, node.child, dctNodes);
+    }
+    
+    if(node.sibling > -1)
+    {
+      build(parent, nodes, node.sibling, dctNodes);
+    }
+  }
+};

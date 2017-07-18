@@ -19,7 +19,7 @@ for i in *.spt;
 do
   printf "${NC}$i\n"
   g++ -I.. -S --std=c++14 $i.cpp &> /tmp/$i.err
-  if (egrep "(array|ParseError)" /tmp/$i.err > /tmp/$i.perr); then
+  if (egrep -o "((array.*)|(ParseError.*))" /tmp/$i.err > /tmp/$i.perr); then
     mv /tmp/$i.perr ./$i.err
   else
     mv /tmp/$i.err ./$i.err
@@ -43,7 +43,7 @@ do
       ERR=$(grep "error:" $i.err)
       printf "${NC}$i - ${RED}Failed: $ERR\n"
     else
-      ERR=$(grep ParseError $i.err|xargs)
+      ERR=$(grep ParseError $i.err)
       printf "${NC}$i - ${BLUE}Passed: $ERR\n"
       rm $i.err
     fi

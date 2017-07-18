@@ -1,2 +1,2 @@
-../seephit.h:525:9:   in constexpr expansion of 'ParseError(((const char*)"Unexpected character inside tag content")).ErrLine::operator[](((size_t)iLine))'
-invalid_syntax_error.spt:1:1: error: array subscript value '1' is outside the bounds of array type 'int [0]'
+ParseError(((const char*)"Unexpected character inside tag content")).ErrLine::operator[](((size_t)iLine))'
+array subscript value '1' is outside the bounds of array type 'int [0]'
