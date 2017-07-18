@@ -1,4 +1,6 @@
 #pragma once
+#include <cassert>
+
 #include <string>
 #include <algorithm>
 #include <vector>
@@ -18,6 +20,7 @@ using namespace std;
 
 // Dummy function to prettify compile-time errors
 void ParseError(const char* err) {cerr << "Parse Error:" << err << endl;}
+#define PARSE_ERR(x) ParseError(x)
 
 #else
 
@@ -107,8 +110,20 @@ struct Array
   size_t size = 0;
   const size_t capacity = SIZE;
   
-  constexpr T& back() { return nodes[size]; }
-  constexpr bool add() { return ++size < capacity;}
+  constexpr T& back() 
+  { 
+    if(!size)
+    {
+      assert("Array is 0 szied");
+    }
+    return nodes[size - 1]; 
+  }
+
+  constexpr bool add() 
+  { 
+    ++size;
+    return (size-1) < capacity;
+  }
 };
 
 struct Attr 
@@ -117,7 +132,7 @@ struct Attr
   Symbol name;      
   Symbol value;  
   
-  constexpr Attr():iNode() {}
+  constexpr Attr():iNode(-1) {}
   
   constexpr Attr(int iNode, const Symbol &name, const Symbol &value):
   iNode(iNode), name(name), value(value) {}
@@ -578,49 +593,58 @@ private:
   
   // Parses one attribute like NAME=VALUE
   // NAME is a sequence of [a-z\-] and VALUE is "text", 'text' or {text}
-  constexpr void parseAttr()
+  constexpr bool parseAttr()
   {
-    Attr &attr = newAttr();
-    
     // Swallow any space
     eatSpace();
     checkEOS();
     
-    // Grab the name 
-    attr.name = eatAlpha(isAttr);
+    if(isAlpha(*pszText))
+    { 
+      Attr &attr = newAttr();
+      
+      // Grab the name 
+      attr.name = eatAlpha(isAttr);
+      
+      if(!eatRaw("="))
+      {
+        PARSE_ERR("Expecting '=' after attribute name");
+      }
+      
+      // Check what delimiter is used "  ' or {
+      char close = 0;
+      switch(pszText[0])
+      {
+        case '"': 
+        case '\'': 
+          close = pszText[0];  
+          pszText++;
+          break;
+          
+        case '{':  
+          close = '}'; 
+          pszText++;
+          break;
+          
+        default:
+          PARSE_ERR("Expecting open quote or '{' for attribute value");
+      }
+      
+      attr.value = eatUntil(close, nullptr);
+      checkEOS();
+      
+      // Eat the close delim
+      pszText++;
+      
+      // Swallow any space
+      eatSpace();
+      
+      //DUMP << "Parsed attr " << attr.name.getText() << "=" << attr.value.getText()  << ENDL;
+      
+      return true;
+    } 
     
-    if(!eatRaw("="))
-    {
-      PARSE_ERR("Expecting '=' after attribute name");
-    }
-    
-    // Check what delimiter is used "  ' or {
-    char close = 0;
-    switch(pszText[0])
-    {
-      case '"': 
-      case '\'': 
-        close = pszText[0];  
-        pszText++;
-        break;
-        
-      case '{':  
-        close = '}'; 
-        pszText++;
-        break;
-        
-      default:
-        PARSE_ERR("Expecting open quote or '{' for attribute value");
-    }
-    
-    attr.value = eatUntil(close, nullptr);
-    checkEOS();
-    
-    // Eat the close delim
-    pszText++;
-    
-    // Swallow any space
-    eatSpace();
+    return false;
   }
   
   // Parse "<TAG>", ignores leading whitespace
@@ -640,8 +664,13 @@ private:
       PARSE_ERR("Missing <");
     }
     
+    // Bump the free node index
+    newNode();
+    
     // Try to parse an [a-z]+ as a tag then the closing ">"
     Symbol &sym = nodes.back().tag = eatAlpha(isAlpha);
+    
+    //DUMP << sym.getText() << ENDL;
     
     // Eat any trailing whitespace
     eatSpace();
@@ -654,7 +683,7 @@ private:
     }
     
     // Parse attributes
-    //parseAttr()
+    while(parseAttr());
     
     // Check if void tag
     const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
@@ -689,8 +718,6 @@ private:
       }
     }
     
-    // Bump the free node index
-    newNode();
   }
   
   // Attempts to parse "</TAG>" given "TAG"
@@ -708,6 +735,8 @@ private:
     {
       PARSE_ERR("Mismatched Close Tag");
     }
+    
+    //DUMP << "Close " << sym.getText() << ENDL;
     
     // Ignore space, parse >
     eatSpace();
@@ -750,28 +779,41 @@ constexpr SPTParser operator"" _html(const char *pszText, size_t)
 struct SPTNode
 {
   vector<SPTNode> children;
+  vector<pair<string, string>> attrs;
   string tag, text;
+  int index;
   
-  SPTNode(const string &tag, const string &text) : tag(tag), text(text) {}
+  SPTNode(const string &tag, const string &text, int index) : tag(tag), text(text), index(index) {}
   
   static SPTNode from(const SPTParser &parser)
   {
-    map<int, SPTNode*> dctNodes;
-    SPTNode root("HTML", "");
-    build(root, parser.nodes, 0, dctNodes);
+    // Construct a map of node ID to attr list
+    map<int, vector<pair<string, string>>> dctAttrs;
     
     for(int n = 0; n < parser.attrs.size; ++n)
     {
-      
+      const Attr &attr = parser.attrs[n];
+      if(attr.iNode >= 0)
+      {
+        dctAttrs[attr.iNode].push_back(make_pair(attr.name.getText(), attr.value.getText()));
+      }
     }
     
+    SPTNode root("HTML", "", -1);
+    build(parser, root, 0, dctAttrs);
     return root;
   }
   
   void dump(ostream &ostr, int indent = 0) const
   {
     string sIndent = string(indent * 2, ' ');
-    ostr << sIndent << "<" << tag << ">";
+    ostr << sIndent << "<" << tag;
+    for(const auto &attr: attrs)
+    {
+      ostr << ' ' << attr.first << '=' << '\'' << attr.second << '\'';
+    }
+    
+    ostr << ">";
     
     if(children.size()) 
     {
@@ -799,22 +841,22 @@ struct SPTNode
   }
   
 private:
-  static void build(SPTNode &parent, const Nodes &nodes, int index, map<int, SPTNode*> &dctNodes)
+  static void build(const SPTParser &parser, SPTNode &parent, int index, map<int, vector<pair<string, string>>> &dctAttrs)
   {
-    const Node &node = nodes[index];
+    const Node &node = parser.nodes[index];
     auto &tag = node.getTag();
     auto &text = node.getText(tag != "PRE");
-    parent.children.emplace_back(SPTNode(tag, text));
-    dctNodes[index] = &parent.children.back(); 
+    parent.children.emplace_back(SPTNode(tag, text, index));
+    parent.children.back().attrs = dctAttrs[index];
     
     if(node.child > -1)
     {
-      build(parent.children.back(), nodes, node.child, dctNodes);
+      build(parser, parent.children.back(), node.child, dctAttrs);
     }
     
     if(node.sibling > -1)
     {
-      build(parent, nodes, node.sibling, dctNodes);
+      build(parser, parent, node.sibling, dctAttrs);
     }
   }
 };
