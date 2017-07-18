@@ -19,7 +19,7 @@ for i in *.spt;
 do
   printf "${NC}$i\n"
   g++ -I.. -S --std=c++14 $i.cpp &> /tmp/$i.err
-  if (grep "ParseError(\"" /tmp/$i.err > /tmp/$i.perr); then
+  if (egrep "(array|ParseError)" /tmp/$i.err > /tmp/$i.perr); then
     mv /tmp/$i.perr ./$i.err
   else
     mv /tmp/$i.err ./$i.err
@@ -39,7 +39,7 @@ do
     printf "${NC}$i - ${RED}Test file $i.expected not found\n"
   else
     
-    if ! (diff $i.err $i.expected) > /dev/null ; then
+    if ! (diff -b $i.err $i.expected) > /dev/null ; then
       ERR=$(grep "error:" $i.err)
       printf "${NC}$i - ${RED}Failed: $ERR\n"
     else

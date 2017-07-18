@@ -1,1 +1,2 @@
-       ParseError("Expecting a tag name after <");
+../seephit.h:555:9:   in constexpr expansion of 'ParseError(((const char*)"Expecting a tag name after <")).ErrLine::operator[](((size_t)iLine))'
+invalid_whitespace.spt:1:1: error: array subscript value '1' is outside the bounds of array type 'int [0]'

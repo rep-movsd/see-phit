@@ -4,8 +4,10 @@ using namespace std;
 
 int main()
 {
-  constexpr auto nodes =
-  #include "test/valid.spt"
+  constexpr auto parser =
+    #include "test/valid.spt"
   
-  dumpNode(nodes, 0, 0);
+  SPTNode root = SPTNode::from(parser.nodes);
+  root.dump(cerr);
+  
 }

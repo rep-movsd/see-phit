@@ -7,10 +7,12 @@ using namespace std;
 
 int main()
 {
-  constexpr auto nodes = 
+  constexpr auto parser =
   #include "${file}" 
   
-  dumpNode(nodes, 0, 0);
+  SPTNode root = SPTNode::from(parser.nodes);
+  root.dump(cerr);
+  
 }
 
 `;

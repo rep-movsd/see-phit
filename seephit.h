@@ -2,10 +2,10 @@
 #include <string>
 #include <algorithm>
 #include <vector>
+#include <iostream>
 #include "tags.hpp"
 
 using namespace std;
-
 
 // Allow runtime debugging for development
 #ifdef SPT_DEBUG
@@ -29,8 +29,21 @@ struct DummyOutStream
 
 constexpr DummyOutStream DummyOut;
 
+struct ErrLine
+{
+  int dummy[0];
+  constexpr int &operator[](size_t i) { return dummy[i];};
+};
+
 // Dummy function to prettify compile-time errors
-void ParseError(const char* err);
+constexpr ErrLine ParseError(const char* err)
+{
+  return ErrLine{};
+}
+
+#define PARSE_ERR(x) \
+int iLine = curLine(); \
+ParseError(x)[iLine] = 0
 
 #endif
 
@@ -48,7 +61,6 @@ constexpr bool isSpace(char ch)
   return ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t';
 }
 
-
 struct Symbol
 {
   constexpr Symbol(): pBeg(), pEnd() {}
@@ -56,49 +68,93 @@ struct Symbol
   const char *pBeg;
   const char *pEnd;
   
-#ifdef SPT_DEBUG
   string getText() const { return string(pBeg, pEnd); }
-#else
-  constexpr int getText() const { return 0; }
-#endif
-
+  
+  constexpr size_t size() const { return pEnd - pBeg; } 
+  
+  constexpr bool operator==(const Symbol &that) const
+  {
+    if(size() == that.size())
+    {
+      auto p1 = pBeg, p2 = that.pBeg;
+      while(p1 != pEnd)
+      {
+        if(toUpper(*p1) != toUpper(*p2)) return false;
+        ++p1;
+        ++p2;
+      }
+      
+      return true;
+    }
+    return false;
+  }
+  
+  constexpr bool operator!=(const Symbol &that) const
+  {
+    return !(*this == that);
+  }
+  
 };
 
-/*
- * 
- * Represents a multiway tree 
- * 
- * Each node has two pointers 
- * sibling -> 
- * and 
- * child |
- * 
- * Two symbols, tag and text represent the tagname and the text content if any
- * 
- * For example
- * <HTML>
- *  <DIV>
- *  </DIV>
- *  <DIV>
- *    <P>Hello</P>
- *  </DIV>
- *  <DIV>
- *  </DIV>
- * </HTML>
- * 
- * 
- * HTML-> -1
- * |
- * DIV -> DIV ->  DIV -> -1
- * |      |       |
- * NULL   P->-1   -1
- * 
- * Since this is meant to be a compile time DS, pointers sibling and child are just ints
- * They index into an array of fixed size
- */
+template<typename T, int SIZE>
+struct Array
+{
+  T nodes[SIZE];
+  constexpr T& operator[](size_t i) { return nodes[i]; }
+  constexpr const T& operator[](size_t i) const { return nodes[i]; }
+  size_t size = 0;
+  const size_t capacity = SIZE;
+};
+
+struct Attr 
+{
+  int iNode;
+  Symbol name;      
+  Symbol value;  
+  
+  constexpr Attr():iNode() {}
+  
+  constexpr Attr(int iNode, const Symbol &name, const Symbol &value):
+  iNode(iNode), name(name), value(value) {}
+  
+  constexpr Attr(const Attr &a):iNode(a.iNode), name(a.name), value(a.value){}
+};
 
 struct Node
 {
+  /*
+   * 
+   * Represents a multiway tree 
+   * 
+   * Each node has two pointers 
+   * sibling -> 
+   * and 
+   * child |
+   * 
+   * Two symbols, tag and text represent the tagname and the text content if any
+   * 
+   * For example
+   * <HTML>
+   *  <DIV>
+   *  </DIV>
+   *  <DIV>
+   *    <P>Hello</P>
+   *  </DIV>
+   *  <DIV>
+   *  </DIV>
+   * </HTML>
+   * 
+   * 
+   * HTML-> -1
+   * |
+   * DIV -> DIV ->  DIV -> -1
+   * |      |       |
+   * NULL   P->-1   -1
+   * 
+   * Since this is meant to be a compile time DS, pointers sibling and child are just ints
+   * They index into an array of fixed size
+   */
+  
   constexpr Node():sibling(-1), child(-1), tag(), text() {}
   constexpr Node(const Node &n):
   sibling(n.sibling), child(n.child), tag(n.tag), text(n.text) {}
@@ -130,15 +186,8 @@ struct Node
   Symbol text;
 };
 
-template<int SIZE>
-struct NodeArray
-{
-  Node nodes[SIZE];
-  constexpr Node& operator[](size_t i) { return nodes[i]; }
-  constexpr const Node& operator[](size_t i) const { return nodes[i]; }
-};
-
-typedef NodeArray<256> Nodes;
+typedef Array<Attr, 256> Attrs;
+typedef Array<Node, 1024> Nodes;
 
 struct SPTNode
 {
@@ -146,7 +195,7 @@ struct SPTNode
   string tag, text;
   
   SPTNode(const string &tag, const string &text) : tag(tag), text(text) {}
-
+  
   static SPTNode from(const Nodes &nodes)
   {
     SPTNode root("HTML", "");
@@ -158,7 +207,7 @@ struct SPTNode
   {
     string sIndent = string(indent * 2, ' ');
     ostr << sIndent << "<" << tag << ">";
-
+    
     if(children.size()) 
     {
       ostr << "\n";
@@ -204,7 +253,6 @@ private:
   }
 };
 
-
 struct SPT 
 {
   static void dumpNode(const Nodes &nodes, int index, int indent)
@@ -237,7 +285,7 @@ struct SPT
       dumpNode(nodes, node.sibling, indent);
     }
   }
-
+  
   static void dumpNodeRaw(const Nodes &nodes, int n)
   {
     for(int i = 0; i < n; ++i)
@@ -251,28 +299,35 @@ struct SPT
       cerr << endl;
     }
   }
-};
-
-
-// Represents the state of the parser
-struct ParseState
-{
-  const char *text;  // Position in the stream
-  const char *start;
-  size_t iFree;      // Index of next free node
   
-  constexpr ParseState(const char *pos):text(pos), start(pos), iFree(){}
-  constexpr ParseState():text(), start(), iFree(){}
-  
-  constexpr int pos() {return text - start;}
+  static void dumpAttrs(const Attrs &attrs)
+  {
+    for(int i = 0; i < attrs.size; ++i)
+    {
+      const Attr &attr = attrs[i];
+      cerr << attr.name.getText() << "=" << attr.value.getText() << endl;
+    }
+  }
 };
-
-void dumpNode(const Nodes &nodes, int index, int indent);
-void dumpNodeRaw(const Nodes &nodes, int n);
 
 constexpr bool isAlpha(char ch)
 {
   return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'); 
+}
+
+constexpr bool isNum(char ch)
+{
+  return (ch >= '0' && ch <= '9'); 
+}
+
+constexpr bool isAttr(char ch)
+{
+  return isAlpha(ch) || ch=='-'; 
+}
+
+constexpr bool isAttrVal(char ch)
+{
+  return isAlpha(ch) || isNum(ch); 
 }
 
 // Compare s1 and s2
@@ -290,106 +345,6 @@ constexpr int cmpUpperCase(const char *s1, const char *s2)
   return toUpper(*s1) < toUpper(*s2) ? -1 : 1;
 }
 
-
-// Raises compiletime error if no more characters left to parse
-constexpr const char *checkEOS(const char *pszText)
-{
-  bool eos = !*pszText;
-  if(eos) ParseError("Unexpected end of stream");
-  
-  return pszText;
-}
-
-// Takes a string literal and returns pointer to first non-whitespace character
-constexpr const char *eatSpace(const char *pszText)
-{
-  while(isSpace(*pszText))
-  {
-    ++pszText;
-  }
-  return pszText;
-}
-
-// Takes a string literal text and tries to consume the characters in pszSym
-constexpr const char *eatRaw(const char *pszText, const char *pszSym)
-{
-  // As long as we dont hit the end
-  while(*pszSym)
-  {
-    // Any mismatch is a parse error
-    if(*pszSym != *pszText) 
-    {
-      return nullptr;
-    }
-    
-    ++pszSym;
-    ++pszText;
-    
-    // Ensure we are not at end of stream before the symbol has been compared fully
-    if(*pszSym)
-    {
-      checkEOS(pszText);
-    }
-  }
-  
-  return pszText;
-}
-
-// Takes a string literal text and tries to consume the characters in [sym.pBeg, sym.pEnd)
-constexpr const char *eatSym(const char *pszText, const Symbol &sym)
-{
-  auto p = sym.pBeg;
-  while(p != sym.pEnd)
-  {
-    if(toUpper(*p) != toUpper(*pszText)) return nullptr;    
-    ++p;
-    ++pszText;
-    
-    // Ensure we are not at end of stream before the symbol has been compared fully
-    if(p != sym.pEnd)
-    {
-      checkEOS(pszText);
-    }
-  }
-  
-  return pszText;
-}
-
-// Takes a string literal text and tries to consume [a-z]+
-constexpr const Symbol eatAlpha(const char *pszText)
-{
-  // Ensure not EOS
-  checkEOS(pszText);
-  
-  Symbol sym;
-  sym.pBeg = pszText;
-  sym.pEnd = pszText;
-  while(isAlpha(*sym.pEnd)) sym.pEnd++;
-  
-  // Ensure at least 1 character is consumed
-  bool empty_tag = sym.pBeg == sym.pEnd;
-  if(empty_tag) ParseError("Expecting an identifier");
-  
-  return sym;
-}
-
-// Takes a string literal text and tries to consume stuff until ch is encountered
-constexpr const Symbol eatUntil(const char *pszText, char ch, const bool *unExpected)
-{
-  Symbol sym;
-  sym.pBeg = pszText;
-  sym.pEnd = pszText;
-  while(*sym.pEnd && *sym.pEnd != ch) 
-  {
-    if(unExpected && unExpected[int(*sym.pEnd)])
-    {
-      ParseError("Unexpected character inside tag content");
-    }
-    sym.pEnd++;
-  }
-  
-  return sym;
-}
 
 // Checks if tag[0..len) matches any entry in the tags array
 constexpr int findTag(const char *const tags[], int nTags, const char *tag)
@@ -419,237 +374,435 @@ constexpr int findTag(const char *const tags[], int nTags, const char *tag)
   return -1;
 }
 
-// Parse "<TAG>", ignores leading whitespace
-// https://www.w3.org/TR/REC-xml/#sec-starttags
-// No space alloed between < and tag name
-constexpr const ParseState parseOpenTag(Nodes &nodes, ParseState state)
+
+// Represents the state of the parser
+struct SPTParser
 {
-  DUMP << "Parsing open tag ..." << ENDL;
+  const char *pszText;  // Position in the stream
+  const char *start;
+  size_t iFreeNode;     // Index of next free node
+  size_t iFreeAttr;     // Index of next free attribute
+  Nodes nodes;
+  Attrs attrs;
   
-  // Left trim whitespace
-  state.text = eatSpace(state.text);
-  checkEOS(state.text);
+  constexpr SPTParser(const char *pszText): pszText(pszText), start(pszText), iFreeNode(), iFreeAttr() {}
+  constexpr SPTParser(): pszText(), start(), iFreeNode(), iFreeAttr() {}
   
-  // Try to parse the "<"
-  bool openBracket = *state.text++ == '<';
-  if(!openBracket) 
+  // Return current node
+  constexpr Node &node() {return nodes[iFreeNode];}
+  
+  // Return current attr
+  constexpr Attr &attr() {return attrs[iFreeAttr];}
+  
+  // Return line number of current poistion
+  constexpr int curLine() const
   {
-    ParseError("Missing <");
+    int n = 0;
+    auto p = start;
+    while(p != pszText)
+    {
+      if(*p++ == '\n') ++n;
+    }
+    return n;
   }
   
-  // Try to parse an [a-z]+ as a tag then the closing ">"
-  nodes[state.iFree].tag = eatAlpha(state.text);
-  Symbol &sym = nodes[state.iFree].tag;
-
-  // Eat any trailing whitespace
-  state.text = eatSpace(sym.pEnd);
+  // Advances the free node pointer with bounds check
+  constexpr void newNode() 
+  { 
+    if(iFreeNode == nodes.capacity)
+    {
+      PARSE_ERR("Too many nodes");
+    }
+    ++iFreeNode; 
+  } 
   
-  // Check if valid tag
-  const int nTags = sizeof(arrTags)/sizeof(arrTags[0]);
-  if(findTag(arrTags, nTags, sym.pBeg) == -1)
-  {
-    ParseError("Unknown tag name");
-  }
-  
-  // Check if void tag
-  const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
-  const int idx = findTag(arrVoidTags, nVoidTags, sym.pBeg);
-  
-  if(idx != -1)
-  {
-    DUMP << "Parsed void tag : index " << idx << " sym len " << sym.len() << ENDL;
+  // Advances the free attr pointer with bounds check, associates new attr with the current ndoe
+  constexpr void newAttr() 
+  { 
+    if(iFreeAttr == attrs.capacity)
+    {
+      PARSE_ERR("Too many attributes");
+    }
+    ++iFreeAttr; 
     
-    // Void tag, add the "/" too
-    state.text = eatSpace(state.text);
-    state.text = eatRaw(state.text, "/");
-    
-    // Bump up the symbol end, so the parser can check for a trailing / and not look for a close tag
-    sym.pEnd = state.text;
-
-    bool voidTag = state.text;
-    if(!voidTag) ParseError("Missing / on a void tag");
-  }
-
-  // Grab the final >
-  state.text = eatRaw(state.text, ">");
-  bool closeBracket = state.text;
-  if(!closeBracket) 
+    // Link the attribute to the node
+    attr().iNode = iFreeNode;
+  } 
+  
+  // Raises compiletime error if no more characters left to parse
+  constexpr void checkEOS()
   {
+    bool eos = !*pszText;
+    if(eos) 
+    {
+      PARSE_ERR("Unexpected end of stream");
+    }
+  }
+  
+  // Advances to first non-whitespace character
+  constexpr void eatSpace()
+  {
+    while(isSpace(*pszText)) ++pszText;
+  }
+  
+  // Consumes [a-z]+
+  template<typename F> constexpr const Symbol eatAlpha(F isX)
+  {
+    // Ensure not EOS
+    checkEOS();
+    
+    Symbol sym;
+    sym.pBeg = pszText;
+    sym.pEnd = pszText;
+    while(isX(*sym.pEnd)) sym.pEnd++;
+    
+    // Ensure at least 1 character is consumed
+    bool empty_tag = sym.pBeg == sym.pEnd;
+    if(empty_tag) 
+    {
+      PARSE_ERR("Expecting an identifier");
+    }
+    
+    pszText = sym.pEnd;
+    return sym;
+  }
+  
+  // Tries to consume the string pszSym
+  constexpr const bool eatRaw(const char *pszSym)
+  {
+    // As long as we dont hit the end
+    while(*pszSym)
+    {
+      // Any mismatch is a parse error
+      if(*pszSym != *pszText) 
+      {
+        return false;
+      }
+      
+      ++pszSym;
+      ++pszText;
+      
+      // Ensure we are not at end of stream before the symbol has been compared fully
+      if(*pszSym)
+      {
+        checkEOS();
+      }
+    }
+    
+    return true;
+  }
+  
+  // Tries to consume the characters in [sym.pBeg, sym.pEnd)
+  constexpr bool eatSym(const Symbol &sym)
+  {
+    auto p = sym.pBeg;
+    while(p != sym.pEnd)
+    {
+      if(toUpper(*p) != toUpper(*pszText)) return false;    
+      ++p;
+      ++pszText;
+      
+      // Ensure we are not at end of stream before the symbol has been compared fully
+      if(p != sym.pEnd)
+      {
+        checkEOS();
+      }
+    }
+    
+    return true;
+  }
+  
+  // Consume stuff until ch is encountered
+  constexpr const Symbol eatUntil(char ch, const bool *unExpected)
+  {
+    Symbol sym;
+    sym.pBeg = pszText;
+    sym.pEnd = pszText;
+    while(*sym.pEnd && *sym.pEnd != ch) 
+    {
+      if(unExpected && unExpected[int(*sym.pEnd)])
+      {
+        PARSE_ERR("Unexpected character inside tag content");
+      }
+      sym.pEnd++;
+    }
+    
+    pszText = sym.pEnd;
+    return sym;
+  }
+  
+  // Checks if we have an open tag at p
+  constexpr bool isOpenTag()
+  {
+    auto saved = pszText;
+    eatSpace();
+    if(*pszText && *pszText++ == '<')
+    {
+      if(*pszText)
+      {
+        if(isAlpha(*pszText)) 
+        {
+          pszText = saved;
+          return true;
+        }
+        
+        if(*pszText == '/') 
+        {
+          pszText = saved;
+          return false;
+        }
+        
+        PARSE_ERR("Expecting a tag name after <");
+      }
+    }
+    
+    pszText = saved;
+    return false;
+  }
+  
+  // Checks if we have a close tag at state.text
+  constexpr bool isCloseTag()
+  {
+    auto p = pszText;
+    if(*p && *p++ == '<')
+    {
+      if(*p && *p++ == '/')
+      {
+        return isAlpha(*p);
+      }
+    }
+    return false;
+  }
+  
+  // Parses one attribute like NAME=VALUE
+  // NAME is a sequence of [a-z\-] and VALUE is "text", 'text' or {text}
+  constexpr void parseAttr()
+  {
+    // Swallow any space
+    eatSpace();
+    checkEOS();
+    
+    // Grab the name 
+    attr().name = eatAlpha(isAttr);
+    
+    if(!eatRaw("="))
+    {
+      PARSE_ERR("Expecting '=' after attribute name");
+    }
+    
+    // Check what delimiter is used "  ' or {
+    char close = 0;
+    switch(pszText[0])
+    {
+      case '"': 
+      case '\'': 
+        close = pszText[0];  
+        pszText++;
+        break;
+        
+      case '{':  
+        close = '}'; 
+        pszText++;
+        break;
+        
+      default:
+        PARSE_ERR("Expecting open quote or '{' for attribute value");
+    }
+    
+    attr().value = eatUntil(close, nullptr);
+    checkEOS();
+    
+    // Eat the close delim
+    pszText++;
+    
+    // Swallow any space
+    eatSpace();
+  }
+  
+  // Parse "<TAG>", ignores leading whitespace
+  // https://www.w3.org/TR/REC-xml/#sec-starttags
+  // No space allowed between < and tag name
+  constexpr void parseOpenTag()
+  {
+    DUMP << "Parsing open tag ..." << ENDL;
+    
+    // Left trim whitespace
+    eatSpace();
+    checkEOS();
+    
+    // Try to parse the "<"
+    if(!eatRaw("<")) 
+    {
+      PARSE_ERR("Missing <");
+    }
+    
+    // Try to parse an [a-z]+ as a tag then the closing ">"
+    Symbol &sym = node().tag = eatAlpha(isAlpha);
+    
+    // Eat any trailing whitespace
+    eatSpace();
+    
+    // Check if valid tag
+    const int nTags = sizeof(arrTags)/sizeof(arrTags[0]);
+    if(findTag(arrTags, nTags, sym.pBeg) == -1)
+    {
+      PARSE_ERR("Unknown tag name");
+    }
+    
+    // Parse attributes
+    
+    // Check if void tag
+    const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
+    const int idx = findTag(arrVoidTags, nVoidTags, sym.pBeg);
+    
     if(idx != -1)
     {
-      ParseError("Missing > on void tag");
-    }
-    else
-    {
-      ParseError("Missing > on open tag");
-    }
-  }
-  
-  // Bump the free node index
-  state.iFree++;
-  
-  return state;
-}
-
-// Attempts to parse "</TAG>" given "TAG"
-constexpr const ParseState parseCloseTag(ParseState state, const Symbol &sym)
-{
-  DUMP << "Parsing close tag for ... " << sym.getText() << ENDL;
-
-  // Try to parse the "</"
-  state.text = eatRaw(state.text, "</");
-  bool openBracketSlash = state.text;
-  if(!openBracketSlash) 
-  {
-    ParseError("Expecting a close tag");
-  }
-  
-  // Try to parse the tag name then the closing ">"
-  auto p = eatSym(state.text, sym);
-  bool matchTag = p && !isAlpha(*p);
-  if(!matchTag) 
-  {
-    ParseError("Mismatched tag name after </");
-  }
-  state.text = p;
-  
-  // Ignore space, parse >
-  state.text = eatSpace(state.text);
-  state.text = eatRaw(state.text, ">");
-  bool closeBracket = state.text;
-  if(!closeBracket) 
-  {
-    ParseError("Missing > in close tag");
-  }
-  
-  state.text = eatSpace(state.text);
-  return state;
-}
-
-// Parses all text content until a "<" is hit 
-constexpr const ParseState parseTagContent(Nodes &nodes, ParseState state, int iParentIDX)
-{
-  // make sure we have something
-  checkEOS(state.text);
-  
-  // Try to parse until a "<", forbid & and >
-  bool contentUnexpectedChars[256] = {0};
-  contentUnexpectedChars[int('>')] = true;
-  contentUnexpectedChars[int('&')] = true;
-  nodes[iParentIDX].text = eatUntil(state.text, '<', contentUnexpectedChars);
-  
-  // Make sure we have something left
-  checkEOS(state.text);
-  
-  // Advance the pointer to point to the "<" 
-  state.text = nodes[iParentIDX].text.pEnd; 
-  
-  return state;
-}
-
-// Checks if we have an open tag at p
-constexpr bool isOpenTag(const char *p)
-{
-  p = eatSpace(p);
-  if(*p && *p++ == '<')
-  {
-    if(*p)
-    {
-      if(isAlpha(*p)) return true;
-      if(*p == '/') return false;
+      DUMP << "Parsed void tag : index " << idx << " sym len " << sym.len() << ENDL;
       
-      ParseError("Expecting a tag name after <");
-    }
-  }
-  return false;
-}
-
-// Checks if we have a close tag at state.text
-constexpr bool isCloseTag(const char *p)
-{
-  if(*p && *p++ == '<')
-  {
-    if(*p && *p++ == '/')
-    {
-      return isAlpha(*p);
-    }
-  }
-  return false;
-}
-
-// HTML     :: TAG | HTML TAG
-// TAG      :: OPENTAG CONTENT CLOSETAG
-// CONTENT  :: HTML | TEXT 
-// OPENTAG  :: "<" TAGNAME ">"
-// CLOSETAG :: "<" TAGNAME "/>"
-constexpr const ParseState parseHTML(Nodes &nodes, ParseState state, int iParentIDX)
-{
-  // If its an open tag
-  if(isOpenTag(state.text))
-  {
-    DUMP << "Found open tag ..." << ENDL;
-    
-    // This next parsed nodes index will be the next free one, save it
-    int nYoungestSibling = state.iFree;
-    int nSiblings = 0;
-    
-    // Keep doing this in a loop
-    do
-    {
-      // Parse the open tag
-      int iCurIdx = state.iFree;
-      state = parseOpenTag(nodes, state);
-      const Symbol symTag = nodes[iCurIdx].tag;
+      // Void tag, add the "/" too
+      eatSpace();
       
-      // Second sibling onwards
-      if(++nSiblings > 1)
+      // Bump up the symbol end, so the parser can check for a trailing / and not look for a close tag
+      sym.pEnd = pszText + 1;
+      
+      if(!eatRaw("/")) 
       {
-        // Set elder siblings sibling index to this one, this becomes the youngest
-        nodes[nYoungestSibling].sibling = iCurIdx;
-        nYoungestSibling = iCurIdx;
+        PARSE_ERR("Missing / on a void tag");
       }
-      else // First child, set the parents child index to this if parent exists
+    }
+
+    // Grab the final >
+    if(!eatRaw(">")) 
+    {
+      if(idx != -1)
       {
-        if(iParentIDX >= 0)
+        PARSE_ERR("Missing > on void tag");
+      }
+      else
+      {
+        PARSE_ERR("Missing > on open tag");
+      }
+    }
+    
+    // Bump the free node index
+    newNode();
+  }
+  
+  // Attempts to parse "</TAG>" given "TAG"
+  constexpr void parseCloseTag(const Symbol &symExpected)
+  {
+    // Try to parse the "</"
+    if(!eatRaw("</")) 
+    {
+      PARSE_ERR("Expecting a close tag");
+    }
+    
+    // Try to parse the tag name
+    Symbol sym = eatAlpha(isAlpha);
+    if(sym != symExpected) 
+    {
+      PARSE_ERR("Mismatched Close Tag");
+    }
+    
+    // Ignore space, parse >
+    eatSpace();
+    if(!eatRaw(">")) 
+    {
+      PARSE_ERR("Missing > in close tag");
+    }
+    
+    // Eat trailing space
+    eatSpace();
+  }
+
+  // Parses all text content until a "<" is hit 
+  constexpr void parseTagContent(int iParentIDX)
+  {
+    // make sure we have something
+    checkEOS();
+    
+    // Try to parse until a "<", forbid & and >
+    bool contentUnexpectedChars[256] = {0};
+    contentUnexpectedChars[int('>')] = true;
+    contentUnexpectedChars[int('&')] = true;
+    nodes[iParentIDX].text = eatUntil('<', contentUnexpectedChars);
+    
+    // Make sure we have something left
+    checkEOS();
+  }
+  
+  // HTML     :: TAG | HTML TAG
+  // TAG      :: OPENTAG CONTENT CLOSETAG
+  // CONTENT  :: HTML | TEXT 
+  // OPENTAG  :: "<" TAGNAME ">"
+  // CLOSETAG :: "<" TAGNAME "/>"
+  constexpr const void parseHTML(int iParentIDX)
+  {
+    // If its an open tag
+    if(isOpenTag())
+    {
+      DUMP << "Found open tag ..." << ENDL;
+      
+      // This next parsed nodes index will be the next free one, save it
+      int nYoungestSibling = iFreeNode;
+      int nSiblings = 0;
+      
+      // Keep doing this in a loop
+      do
+      {
+        // Parse the open tag
+        int iCurIdx = iFreeNode;
+        parseOpenTag();
+        const Symbol symTag = nodes[iCurIdx].tag;
+        
+        // Second sibling onwards
+        if(++nSiblings > 1)
         {
-          nodes[iParentIDX].child = iCurIdx;
+          // Set elder siblings sibling index to this one, this becomes the youngest
+          nodes[nYoungestSibling].sibling = iCurIdx;
+          nYoungestSibling = iCurIdx;
+        }
+        else // First child, set the parents child index to this if parent exists
+        {
+          if(iParentIDX >= 0)
+          {
+            nodes[iParentIDX].child = iCurIdx;
+          }
+        }
+        
+        // If this is a void tag, no need to parse children or close tag
+        if(symTag.pEnd[-1] != '/')
+        {
+          // Recursively parse the content inside
+          parseHTML(iCurIdx);
+          
+          // Parse the close tag
+          parseCloseTag(symTag);
+        }
+        else // eat up any whitespace
+        {
+          eatSpace();
         }
       }
-      
-      // If this is a void tag, no need to parse children or close tag
-      if(symTag.pEnd[-1] != '/')
-      {
-        // Recursively parse the content inside
-        state = parseHTML(nodes, state, iCurIdx);
-        
-        // Parse the close tag
-        state = parseCloseTag(state, symTag);
-      }
-      else // eat up any whitespace
-      {
-        state.text = eatSpace(state.text);
-      }
+      while(isOpenTag());
     }
-    while(isOpenTag(state.text));
-  }
-  else // Has to be text content
-  {
-    if(iParentIDX == -1)
+    else // Has to be text content
     {
-      ParseError("Expecting an open tag at top level");
+      if(iParentIDX == -1)
+      {
+        PARSE_ERR("Expecting an open tag at top level");
+      }
+      
+      parseTagContent(iParentIDX);
     }
-    
-    state = parseTagContent(nodes, state, iParentIDX);
   }
-  
-  return state;
-}
+};
 
-constexpr Nodes operator"" _html(const char *pszText, size_t len)
+
+constexpr SPTParser operator"" _html(const char *pszText, size_t)
 {
-  Nodes nodes {};
-  ParseState state(pszText);
-  parseHTML(nodes, state, -1);
-  return nodes;
+  SPTParser parser(pszText);
+  parser.parseHTML(-1);
+  return parser;
 }
 

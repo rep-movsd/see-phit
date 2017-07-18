@@ -1,1 +1,2 @@
-     ParseError("Mismatched tag name after </");
+../seephit.h:704:7:   in constexpr expansion of 'ParseError(((const char*)"Mismatched Close Tag")).ErrLine::operator[](((size_t)iLine))'
+invalid_mismatch.spt:1:1: error: array subscript value '4' is outside the bounds of array type 'int [0]'

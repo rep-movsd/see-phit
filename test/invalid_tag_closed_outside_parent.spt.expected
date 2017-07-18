@@ -1,1 +1,2 @@
-     ParseError("Expecting a close tag");
+../seephit.h:697:7:   in constexpr expansion of 'ParseError(((const char*)"Expecting a close tag")).ErrLine::operator[](((size_t)iLine))'
+invalid_tag_closed_outside_parent.spt:1:1: error: array subscript value '4' is outside the bounds of array type 'int [0]'
