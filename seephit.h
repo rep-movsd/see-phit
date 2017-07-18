@@ -1,6 +1,6 @@
 #pragma once
 #include <cassert>
-
+#include <cstdint>
 #include <string>
 #include <algorithm>
 #include <vector>
@@ -66,16 +66,23 @@ constexpr bool isSpace(char ch)
   return ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t';
 }
 
+// Represents a symbol - kind of like a string_view on a const char*
 struct Symbol
 {
-  constexpr Symbol(): pBeg(), pEnd() {}
-  constexpr int len() const { return pEnd - pBeg;}
   const char *pBeg;
   const char *pEnd;
   
-  string getText() const { return string(pBeg, pEnd); }
+  constexpr Symbol(): pBeg(), pEnd() {}
+  constexpr Symbol(const char *pBeg, const char *pEnd): pBeg(pBeg), pEnd(pEnd) {}
+  constexpr Symbol(const char *p): pBeg(p), pEnd(p)
+  {
+    while(*pEnd) pEnd++;
+  }
   
-  constexpr size_t size() const { return pEnd - pBeg; } 
+  constexpr size_t size() const       { return pEnd - pBeg; }
+  constexpr const char *begin() const { return pBeg; }
+  constexpr const char *end() const   { return pEnd; }
+  constexpr bool empty() const        { return size() == 0; }
   
   constexpr bool operator==(const Symbol &that) const
   {
@@ -99,6 +106,52 @@ struct Symbol
     return !(*this == that);
   }
   
+  // Simplistic hash (not meant to be perfect)
+  constexpr uint16_t hash()
+  {
+    uint16_t ret = 5381;
+    
+    for(auto ch: *this)
+    {
+      ret = ((ret << 5) + ret) + ch; 
+    }
+    return ret;
+  }
+  
+  // Compare sym1 and sym2
+  constexpr int cmpCaseLess(const Symbol &that) const
+  {
+    if(size() < that.size()) return -1;
+    if(size() > that.size()) return 1;
+    
+    for(int i = 0; i < size(); ++i)
+    {
+      char a = toUpper(pBeg[i]);
+      char b = toUpper(that.pBeg[i]);
+      if(a < b) return -1;
+      if(a > b) return 1;
+    }
+    
+    return 0;
+  }
+  
+  // Compare s1 and s2 with case sensitivity
+  constexpr int cmpCase(const Symbol &that) const
+  {
+    if(size() < that.size()) return -1;
+    if(size() > that.size()) return 1;
+    
+    for(int i = 0; i < size(); ++i)
+    {
+      char a = pBeg[i];
+      char b = that.pBeg[i];
+      if(a < b) return -1;
+      if(a > b) return 1;
+    }
+    return 0;
+  }
+
+  string getText() const { return string(pBeg, pEnd); }
 };
 
 template<typename T, int SIZE>
@@ -110,11 +163,14 @@ struct Array
   size_t size = 0;
   const size_t capacity = SIZE;
   
+  constexpr T* begin() { return nodes; }
+  constexpr T* end() { return nodes + size; }
+  
   constexpr T& back() 
   { 
     if(!size)
     {
-      assert("Array is 0 szied");
+      assert("Array is 0 sized");
     }
     return nodes[size - 1]; 
   }
@@ -125,6 +181,25 @@ struct Array
     return (size-1) < capacity;
   }
 };
+
+// Simple abstraction for a symbol table
+struct SymTable
+{
+  Array<Symbol, 1024> syms;
+  
+  // Adds a symbol to the table, returns false if already exists
+  constexpr bool addSym(const Symbol &symNew)
+  {
+    for(const auto &sym: syms)
+    {
+      if(symNew == sym) return false;
+    }
+    syms.add();
+    syms.back() = symNew;
+    return true;
+  }
+};
+
 
 struct Attr 
 {
@@ -175,18 +250,19 @@ struct Node
    * They index into an array of fixed size
    */
   
-  constexpr Node():sibling(-1), child(-1), tag(), text() {}
+  constexpr Node():sibling(-1), child(-1), tag(), text(), id() {}
   constexpr Node(const Node &n):
-  sibling(n.sibling), child(n.child), tag(n.tag), text(n.text) {}
+  sibling(n.sibling), child(n.child), tag(n.tag), text(n.text), id(n.id) {}
   
   // returns the tag in uppercase
   const string getTag() const 
   {
-    string ret(tag.pBeg, tag.pEnd - tag.pBeg);
+    string ret(tag.pBeg, tag.size());
     transform(begin(ret), end(ret), begin(ret), toUpper);
     return ret;
   };
   
+    
   // Returns the text content, optionally stripping leading and trailing space
   const string getText(bool trim = false) const 
   {
@@ -204,11 +280,11 @@ struct Node
   int child;
   Symbol tag;
   Symbol text;
+  Symbol id;
 };
 
 typedef Array<Attr, 256> Attrs;
 typedef Array<Node, 1024> Nodes;
-
 
 struct SPT 
 {
@@ -289,9 +365,24 @@ constexpr bool isAttrVal(char ch)
 
 // Compare s1 and s2
 // assumes s2 has a NUL terminator, but s1 may not
-constexpr int cmpUpperCase(const char *s1, const char *s2)
+constexpr int cmpCaseLess(const char *s1, const char *s2)
 {
   while(toUpper(*s1) == toUpper(*s2)) 
+  {
+    s1++;
+    s2++;
+  }  
+  
+  if(!*s2) return 0;
+  
+  return toUpper(*s1) < toUpper(*s2) ? -1 : 1;
+}
+
+// Compare s1 and s2 with case sensitivity
+// assumes s2 has a NUL terminator, but s1 may not
+constexpr int cmpCase(const char *s1, const char *s2)
+{
+  while(*s1 == *s2) 
   {
     s1++;
     s2++;
@@ -312,7 +403,7 @@ constexpr int findTag(const char *const tags[], int nTags, const char *tag)
   while(left < right)
   {
     int mid = (left + right) / 2;
-    int cmp = cmpUpperCase(tag, tags[mid]);
+    int cmp = cmpCaseLess(tag, tags[mid]);
     
     if(cmp > 0)
     {
@@ -331,12 +422,15 @@ constexpr int findTag(const char *const tags[], int nTags, const char *tag)
   return -1;
 }
 
+constexpr const Symbol g_symID{"id"};
 
 // Represents the state of the parser
 struct SPTParser
 {
   Nodes nodes;
   Attrs attrs;
+  SymTable ids;
+  
   
   constexpr SPTParser(const char *pszText): pszText(pszText), start(pszText) {}
   constexpr SPTParser(): pszText(), start() {}
@@ -442,7 +536,7 @@ private:
     }
     
     // Link the attribute to the node
-    attrs.back().iNode = nodes.size;
+    attrs.back().iNode = nodes.size - 1;
     return attrs.back();
   } 
   
@@ -474,8 +568,7 @@ private:
     while(isX(*sym.pEnd)) sym.pEnd++;
     
     // Ensure at least 1 character is consumed
-    bool empty_tag = sym.pBeg == sym.pEnd;
-    if(empty_tag) 
+    if(sym.empty()) 
     {
       PARSE_ERR("Expecting an identifier");
     }
@@ -601,10 +694,8 @@ private:
     
     if(isAlpha(*pszText))
     { 
-      Attr &attr = newAttr();
-      
-      // Grab the name 
-      attr.name = eatAlpha(isAttr);
+      // Get the attr name
+      Symbol name = eatAlpha(isAttr); 
       
       if(!eatRaw("="))
       {
@@ -630,15 +721,37 @@ private:
           PARSE_ERR("Expecting open quote or '{' for attribute value");
       }
       
-      attr.value = eatUntil(close, nullptr);
       checkEOS();
       
+      Symbol value = eatUntil(close, nullptr);
+      if(value.empty())
+      {
+        PARSE_ERR("Empty value for attribute");
+      }
       // Eat the close delim
       pszText++;
       
       // Swallow any space
       eatSpace();
       
+      // Is it an ID tag
+      int cmp = name.cmpCaseLess(g_symID); 
+      if(cmp == 0)
+      {
+        if(!ids.addSym(name))
+        {
+          PARSE_ERR("Duplicate ID on tag");
+        }
+        
+        nodes.back().id = value;
+      }
+      else
+      {
+        Attr &attr = newAttr();
+        attr.name = name;
+        attr.value = value;
+      }
+
       //DUMP << "Parsed attr " << attr.name.getText() << "=" << attr.value.getText()  << ENDL;
       
       return true;
@@ -653,6 +766,8 @@ private:
   constexpr void parseOpenTag()
   {
     DUMP << "Parsing open tag ..." << ENDL;
+    DUMP << "Node size = " << nodes.size << ENDL;
+    
     
     // Left trim whitespace
     eatSpace();
@@ -691,8 +806,6 @@ private:
     
     if(idx != -1)
     {
-      DUMP << "Parsed void tag : index " << idx << " sym len " << sym.len() << ENDL;
-      
       // Void tag, add the "/" too
       eatSpace();
       
@@ -775,12 +888,12 @@ constexpr SPTParser operator"" _html(const char *pszText, size_t)
   return parser;
 }
 
-
 struct SPTNode
 {
+  typedef map<string, string> AttrDict; 
   vector<SPTNode> children;
-  vector<pair<string, string>> attrs;
-  string tag, text;
+  AttrDict attrs;
+  string tag, text, id;
   int index;
   
   SPTNode(const string &tag, const string &text, int index) : tag(tag), text(text), index(index) {}
@@ -788,14 +901,14 @@ struct SPTNode
   static SPTNode from(const SPTParser &parser)
   {
     // Construct a map of node ID to attr list
-    map<int, vector<pair<string, string>>> dctAttrs;
+    map<int, AttrDict> dctAttrs;
     
     for(int n = 0; n < parser.attrs.size; ++n)
     {
       const Attr &attr = parser.attrs[n];
       if(attr.iNode >= 0)
       {
-        dctAttrs[attr.iNode].push_back(make_pair(attr.name.getText(), attr.value.getText()));
+        dctAttrs[attr.iNode][attr.name.getText()] = attr.value.getText();
       }
     }
     
@@ -808,6 +921,12 @@ struct SPTNode
   {
     string sIndent = string(indent * 2, ' ');
     ostr << sIndent << "<" << tag;
+    
+    if(id.size())
+    {
+      ostr << " ID" << "=[" << id << ']';
+    }
+    
     for(const auto &attr: attrs)
     {
       ostr << ' ' << attr.first << '=' << '\'' << attr.second << '\'';
@@ -841,12 +960,19 @@ struct SPTNode
   }
   
 private:
-  static void build(const SPTParser &parser, SPTNode &parent, int index, map<int, vector<pair<string, string>>> &dctAttrs)
+  static void build(const SPTParser &parser, SPTNode &parent, int index, map<int, AttrDict> &dctAttrs)
   {
     const Node &node = parser.nodes[index];
     auto &tag = node.getTag();
     auto &text = node.getText(tag != "PRE");
-    parent.children.emplace_back(SPTNode(tag, text, index));
+    
+    SPTNode sptNode(tag, text, index);
+    if(node.id.size())
+    {
+      sptNode.id = node.id.getText();
+    }
+    
+    parent.children.emplace_back(sptNode);
     parent.children.back().attrs = dctAttrs[index];
     
     if(node.child > -1)

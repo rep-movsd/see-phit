@@ -1,0 +1,2 @@
+ParseError(((const char*)"Duplicate ID on tag")).ErrLine::operator[](((size_t)iLine))'
+array subscript value '12' is outside the bounds of array type 'int [0]'
