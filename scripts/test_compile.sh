@@ -38,12 +38,11 @@ do
   if [ ! -f $i.expected ]; then
     printf "${NC}$i - ${RED}Test file $i.expected not found\n"
   else
-    
     if ! (diff -b $i.err $i.expected) > /dev/null ; then
-      ERR=$(grep "error:" $i.err)
+      ERR=$(cat $i.err)
       printf "${NC}$i - ${RED}Failed: $ERR\n"
     else
-      ERR=$(grep ParseError $i.err)
+      ERR=$(node ../scripts/filter_err.js "$(cat $i.err)")
       printf "${NC}$i - ${BLUE}Passed: $ERR\n"
       rm $i.err
     fi
