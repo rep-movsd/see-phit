@@ -1,29 +1,14 @@
 R"*(
 <span >
   <p  color="red" height='1' weight={test} > 
-    Extra whitespace after close and open tags
+    <div>
+      Extra whitespace after close and open tags
+    </div>
+    
+    <div>
+      Extra whitespace2 after close and open tags
+    </div>
   </p  >
-  
-  <DIV id="hello"> 
-    Extra space after void tag
-  </DIV>
-  <IMG />
-
-  <DIV> 
-    <DIV> 
-      Nested tag, void tag
-    </DIV>
-    <IMG/>
-  </DIV>
-  
-  <P>Inline tag</P>
-  <Span>Mixed case tag name</SPAN>
-
 </span>
 
-<DIV>
-  <DIV> 
-    Multiple top level nodes
-  </DIV>
-</DIV>
 )*"_html; 

@@ -175,6 +175,8 @@ struct Array
     return nodes[size - 1]; 
   }
 
+  constexpr int curr() { return size - 1;}
+  
   constexpr bool add() 
   { 
     ++size;
@@ -248,6 +250,10 @@ struct Node
    * 
    * Since this is meant to be a compile time DS, pointers sibling and child are just ints
    * They index into an array of fixed size
+   * 
+   * Attributes are nested as children under <_ATTR>
+   * Styles are nested under <_ATTR><_STYLE></_STYLE></_ATTR>
+   * 
    */
   
   constexpr Node():sibling(-1), child(-1), tag(), text(), id() {}
@@ -428,9 +434,7 @@ constexpr const Symbol g_symID{"id"};
 struct SPTParser
 {
   Nodes nodes;
-  Attrs attrs;
   SymTable ids;
-  
   
   constexpr SPTParser(const char *pszText): pszText(pszText), start(pszText) {}
   constexpr SPTParser(): pszText(), start() {}
@@ -440,24 +444,51 @@ struct SPTParser
   // CONTENT  :: HTML | TEXT 
   // OPENTAG  :: "<" TAGNAME ">"
   // CLOSETAG :: "<" TAGNAME "/>"
+  // iParentIDX is the index of the oute node whose contents we are parsing
   constexpr const void parseHTML(int iParentIDX)
   {
     // If its an open tag
     if(isOpenTag())
     {
-      DUMP << "Found open tag ..." << ENDL;
-      
       // This next parsed nodes index will be the next free one, save it
-      int nYoungestSibling = nodes.size;
-      int nSiblings = 0;
+      int iParentsEldest = iParentIDX > -1 ? nodes[iParentIDX].child : -1;
+      int nYoungestSibling = iParentsEldest == -1 ? nodes.size : iParentsEldest;
+      int nSiblings = iParentsEldest == -1 ? 0 : 1;
       
       // Keep doing this in a loop
       do
       {
-        // Parse the open tag
-        int iCurIdx = nodes.size;
-        parseOpenTag();
-        const Symbol symTag = nodes[iCurIdx].tag;
+        // Parse the open tag, get its index
+        auto attrs = parseOpenTag();
+        int iCurIdx = nodes.curr();
+        const Symbol &symTag = nodes[iCurIdx].tag;
+        
+        // The first attribute node will be at iCurIdx + 1
+        if(attrs.size)
+        {
+          // Create a node called <@ATTR>, make it the first child
+          Node &node = newNode();
+          node.tag = Symbol("@ATTR");
+          int iAttrNode = nodes.curr();
+          nodes[iCurIdx].child = iAttrNode;
+          
+          // For each attribute, make a node
+          int nAttr = 0;
+          for(const auto &attr: attrs)
+          {
+            Node &node = newNode();
+            node.tag = attr.name;
+            node.text = attr.value;
+            if(!nAttr++)
+            {
+              nodes[iAttrNode].child = nodes.curr();
+            }
+            else
+            {
+              nodes[nodes.curr()-1].sibling = nodes.curr();
+            }
+          }
+        }
         
         // Second sibling onwards
         if(++nSiblings > 1)
@@ -519,25 +550,14 @@ private:
   }
   
   // Advances the free node pointer with bounds check
-  constexpr void newNode() 
+  constexpr Node& newNode() 
   { 
     if(!nodes.add())
     {
       PARSE_ERR("Too many nodes");
     }
-  } 
-  
-  // Advances the free attr pointer with bounds check, associates new attr with the current ndoe
-  constexpr Attr &newAttr() 
-  { 
-    if(!attrs.add())
-    {
-      PARSE_ERR("Too many attributes");
-    }
     
-    // Link the attribute to the node
-    attrs.back().iNode = nodes.size - 1;
-    return attrs.back();
+    return nodes.back();
   } 
   
   // Raises compiletime error if no more characters left to parse
@@ -686,7 +706,7 @@ private:
   
   // Parses one attribute like NAME=VALUE
   // NAME is a sequence of [a-z\-] and VALUE is "text", 'text' or {text}
-  constexpr bool parseAttr()
+  constexpr bool parseAttrs(Array<Attr, 32> &attrs)
   {
     // Swallow any space
     eatSpace();
@@ -747,7 +767,12 @@ private:
       }
       else
       {
-        Attr &attr = newAttr();
+        if(!attrs.add())
+        {
+          PARSE_ERR("Too many attributes");
+        }
+        
+        Attr &attr = attrs.back();
         attr.name = name;
         attr.value = value;
       }
@@ -763,11 +788,10 @@ private:
   // Parse "<TAG>", ignores leading whitespace
   // https://www.w3.org/TR/REC-xml/#sec-starttags
   // No space allowed between < and tag name
-  constexpr void parseOpenTag()
+  constexpr Array<Attr, 32> parseOpenTag()
   {
     DUMP << "Parsing open tag ..." << ENDL;
     DUMP << "Node size = " << nodes.size << ENDL;
-    
     
     // Left trim whitespace
     eatSpace();
@@ -780,10 +804,10 @@ private:
     }
     
     // Bump the free node index
-    newNode();
+    Node &node = newNode();
     
-    // Try to parse an [a-z]+ as a tag then the closing ">"
-    Symbol &sym = nodes.back().tag = eatAlpha(isAlpha);
+    // Try to parse an [a-z]+ as a tag
+    Symbol &sym = node.tag = eatAlpha(isAlpha);
     
     //DUMP << sym.getText() << ENDL;
     
@@ -798,7 +822,8 @@ private:
     }
     
     // Parse attributes
-    while(parseAttr());
+    Array<Attr, 32> attrs;
+    while(parseAttrs(attrs));
     
     // Check if void tag
     const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
@@ -830,7 +855,8 @@ private:
         PARSE_ERR("Missing > on open tag");
       }
     }
-    
+   
+    return attrs;
   }
   
   // Attempts to parse "</TAG>" given "TAG"
@@ -901,19 +927,9 @@ struct SPTNode
   static SPTNode from(const SPTParser &parser)
   {
     // Construct a map of node ID to attr list
-    map<int, AttrDict> dctAttrs;
-    
-    for(int n = 0; n < parser.attrs.size; ++n)
-    {
-      const Attr &attr = parser.attrs[n];
-      if(attr.iNode >= 0)
-      {
-        dctAttrs[attr.iNode][attr.name.getText()] = attr.value.getText();
-      }
-    }
     
     SPTNode root("HTML", "", -1);
-    build(parser, root, 0, dctAttrs);
+    build(parser, root, 0);
     return root;
   }
   
@@ -960,7 +976,7 @@ struct SPTNode
   }
   
 private:
-  static void build(const SPTParser &parser, SPTNode &parent, int index, map<int, AttrDict> &dctAttrs)
+  static void build(const SPTParser &parser, SPTNode &parent, int index)
   {
     const Node &node = parser.nodes[index];
     auto &tag = node.getTag();
@@ -973,16 +989,33 @@ private:
     }
     
     parent.children.emplace_back(sptNode);
-    parent.children.back().attrs = dctAttrs[index];
     
     if(node.child > -1)
     {
-      build(parser, parent.children.back(), node.child, dctAttrs);
+      // Check if first child is "@ATTR"
+      const Node &child = parser.nodes[node.child];
+      if(child.getTag() == "@ATTR")
+      {
+        Node attr = parser.nodes[child.child];
+        while(1)
+        {
+          parent.children.back().attrs[attr.getTag()] = attr.getText();
+          if(attr.sibling == -1) break;
+          attr = parser.nodes[attr.sibling];
+        }
+        
+        build(parser, parent.children.back(), child.sibling);
+      }
+      else
+      {
+        build(parser, parent.children.back(), node.child);
+      }
     }
     
     if(node.sibling > -1)
     {
-      build(parser, parent, node.sibling, dctAttrs);
+      build(parser, parent, node.sibling);
     }
   }
 };
+
