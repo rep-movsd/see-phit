@@ -450,9 +450,13 @@ struct SPTParser
     // If its an open tag
     if(isOpenTag())
     {
-      // This next parsed nodes index will be the next free one, save it
+      // Get this parents eldest sibling if any (could be the ATTR node)
       int iParentsEldest = iParentIDX > -1 ? nodes[iParentIDX].child : -1;
+      
+      // If iParentsEldest exists, then the first sibling is it
       int nYoungestSibling = iParentsEldest == -1 ? nodes.size : iParentsEldest;
+      
+      // If there was a child for this parent set the siblings count
       int nSiblings = iParentsEldest == -1 ? 0 : 1;
       
       // Keep doing this in a loop
@@ -978,24 +982,29 @@ struct SPTNode
 private:
   static void build(const SPTParser &parser, SPTNode &parent, int index)
   {
+    // Get the node tag and content
     const Node &node = parser.nodes[index];
     auto &tag = node.getTag();
     auto &text = node.getText(tag != "PRE");
     
+    // Create a SPTNode and set ID if any
     SPTNode sptNode(tag, text, index);
     if(node.id.size())
     {
       sptNode.id = node.id.getText();
     }
     
+    // Place this node as a child of the parent
     parent.children.emplace_back(sptNode);
     
+    // If there are children for thios node
     if(node.child > -1)
     {
       // Check if first child is "@ATTR"
       const Node &child = parser.nodes[node.child];
       if(child.getTag() == "@ATTR")
       {
+        // Put the chain of attribute nodes into ther attrs array
         Node attr = parser.nodes[child.child];
         while(1)
         {
@@ -1004,17 +1013,20 @@ private:
           attr = parser.nodes[attr.sibling];
         }
         
+        // If there were more nodes after @ATTR, recursively process them
         if(child.sibling > -1)
         {
           build(parser, parent.children.back(), child.sibling);
         }
       }
-      else
+      else // No @ATTR
       {
+        // Process children 
         build(parser, parent.children.back(), node.child);
       }
     }
     
+    // Process siblings
     if(node.sibling > -1)
     {
       build(parser, parent, node.sibling);
