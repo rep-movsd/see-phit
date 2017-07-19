@@ -1004,7 +1004,10 @@ private:
           attr = parser.nodes[attr.sibling];
         }
         
-        build(parser, parent.children.back(), child.sibling);
+        if(child.sibling > -1)
+        {
+          build(parser, parent.children.back(), child.sibling);
+        }
       }
       else
       {
