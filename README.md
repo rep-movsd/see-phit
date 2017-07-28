@@ -12,7 +12,7 @@ Before constexpr, the way to make C++ DSLs was by (ab)using operator overloading
 
 Example:
 
-        #include <iostream>
+    #include <iostream>
     #include "seephit.h"
     using namespace std;
 
@@ -66,7 +66,7 @@ The program will fail to compile if the HTML is malformed - We attempt to make t
 For example, the following fragment:
     
     <DIV>
-    Mismatched closing tag
+    This is a bad closing tag
     </DIVV>
 
 Generates the compiler errors in gcc:
