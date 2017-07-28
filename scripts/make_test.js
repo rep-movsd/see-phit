@@ -8,13 +8,11 @@ using namespace std;
 int main()
 {
   constexpr auto parser =
-  #include "${file}" 
+    #include "${file}" 
   
-  SPTNode root = SPTNode::from(parser);
-  root.dump(cerr);
-  
+  spt::tree spt_tree(parser);
+  spt_tree.root.dump(cerr);
 }
-
 `;
 
 console.log(src);

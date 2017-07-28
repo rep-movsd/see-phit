@@ -7,7 +7,7 @@ int main()
   constexpr auto parser =
     #include "test/valid.spt"
   
-  SPTNode root = SPTNode::from(parser);
-  root.dump(cerr);
-  
+  //SPTDumper::dumpNode(parser.nodes);
+  spt::tree spt_tree(parser);
+  spt_tree.root.dump(cerr);
 }

@@ -7,437 +7,41 @@
 #include <map>
 #include <utility>
 #include <iostream>
+
+using std::string;
+using std::vector;
+using std::pair;
+using std::map;
+using std::ostream;
+using std::cerr;
+using std::endl;
+
 #include "tags.hpp"
+#include "seephit_debug.h"
+#include "seephit_util.h"
 
-using namespace std;
+// maximum nodes and attributes in the tree
+#define SPT_MAX_NODES 1024
+#define SPT_MAX_ATTRS 1024
 
-// Allow runtime debugging for development
-#ifdef SPT_DEBUG
-
-#define constexpr 
-#define DUMP cerr
-#define ENDL "\n"
-
-// Dummy function to prettify compile-time errors
-void ParseError(const char* err) {cerr << "Parse Error:" << err << endl;}
-#define PARSE_ERR(x) ParseError(x)
-
-#else
-
-#define DUMP DummyOut
-#define ENDL 0
-
-struct DummyOutStream
+namespace spt
 {
-  template<typename T>  constexpr const DummyOutStream& operator <<(const T &) const { return *this;}
-};
 
-constexpr DummyOutStream DummyOut;
+typedef array<attr, SPT_MAX_ATTRS> attrs;
+typedef array<cnode, SPT_MAX_NODES> cnodes;
 
-struct ErrLine
+// Hardcoded symbols to detect id and style
+constexpr const char_view g_symID{"id"};
+constexpr const char_view g_symStyle{"style"};
+
+// Compile time parser
+struct parser
 {
-  int dummy[0];
-  constexpr int &operator[](size_t i) { return dummy[i];};
-};
-
-// Dummy function to prettify compile-time errors
-constexpr ErrLine ParseError(const char* err)
-{
-  return ErrLine{};
-}
-
-#define PARSE_ERR(x) \
-int iLine = curLine(); \
-ParseError(x)[iLine] = 0
-
-#endif
-
-constexpr char toUpper(char ch)
-{
-  if(ch >= 'a' && ch <= 'z')
-  {
-    return ch + 'A' - 'a';
-  }
-  return ch;
-}
-
-constexpr bool isSpace(char ch)
-{
-  return ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t';
-}
-
-// Represents a symbol - kind of like a string_view on a const char*
-struct Symbol
-{
-  const char *pBeg;
-  const char *pEnd;
+  cnodes nodes;
+  sym_tab ids;
   
-  constexpr Symbol(): pBeg(), pEnd() {}
-  constexpr Symbol(const char *pBeg, const char *pEnd): pBeg(pBeg), pEnd(pEnd) {}
-  constexpr Symbol(const char *p): pBeg(p), pEnd(p)
-  {
-    while(*pEnd) pEnd++;
-  }
-  
-  constexpr size_t size() const       { return pEnd - pBeg; }
-  constexpr const char *begin() const { return pBeg; }
-  constexpr const char *end() const   { return pEnd; }
-  constexpr bool empty() const        { return size() == 0; }
-  
-  constexpr bool operator==(const Symbol &that) const
-  {
-    if(size() == that.size())
-    {
-      auto p1 = pBeg, p2 = that.pBeg;
-      while(p1 != pEnd)
-      {
-        if(toUpper(*p1) != toUpper(*p2)) return false;
-        ++p1;
-        ++p2;
-      }
-      
-      return true;
-    }
-    return false;
-  }
-  
-  constexpr bool operator!=(const Symbol &that) const
-  {
-    return !(*this == that);
-  }
-  
-  // Simplistic hash (not meant to be perfect)
-  constexpr uint16_t hash()
-  {
-    uint16_t ret = 5381;
-    
-    for(auto ch: *this)
-    {
-      ret = ((ret << 5) + ret) + ch; 
-    }
-    return ret;
-  }
-  
-  // Compare sym1 and sym2
-  constexpr int cmpCaseLess(const Symbol &that) const
-  {
-    if(size() < that.size()) return -1;
-    if(size() > that.size()) return 1;
-    
-    for(int i = 0; i < size(); ++i)
-    {
-      char a = toUpper(pBeg[i]);
-      char b = toUpper(that.pBeg[i]);
-      if(a < b) return -1;
-      if(a > b) return 1;
-    }
-    
-    return 0;
-  }
-  
-  // Compare s1 and s2 with case sensitivity
-  constexpr int cmpCase(const Symbol &that) const
-  {
-    if(size() < that.size()) return -1;
-    if(size() > that.size()) return 1;
-    
-    for(int i = 0; i < size(); ++i)
-    {
-      char a = pBeg[i];
-      char b = that.pBeg[i];
-      if(a < b) return -1;
-      if(a > b) return 1;
-    }
-    return 0;
-  }
-
-  string getText() const { return string(pBeg, pEnd); }
-};
-
-template<typename T, int SIZE>
-struct Array
-{
-  T nodes[SIZE];
-  constexpr T& operator[](size_t i) { return nodes[i]; }
-  constexpr const T& operator[](size_t i) const { return nodes[i]; }
-  size_t size = 0;
-  const size_t capacity = SIZE;
-  
-  constexpr T* begin() { return nodes; }
-  constexpr T* end() { return nodes + size; }
-  
-  constexpr T& back() 
-  { 
-    if(!size)
-    {
-      assert("Array is 0 sized");
-    }
-    return nodes[size - 1]; 
-  }
-
-  constexpr int curr() { return size - 1;}
-  
-  constexpr bool add() 
-  { 
-    ++size;
-    return (size-1) < capacity;
-  }
-};
-
-// Simple abstraction for a symbol table
-struct SymTable
-{
-  Array<Symbol, 1024> syms;
-  
-  // Adds a symbol to the table, returns false if already exists
-  constexpr bool addSym(const Symbol &symNew)
-  {
-    for(const auto &sym: syms)
-    {
-      if(symNew == sym) return false;
-    }
-    syms.add();
-    syms.back() = symNew;
-    return true;
-  }
-};
-
-
-struct Attr 
-{
-  int iNode;
-  Symbol name;      
-  Symbol value;  
-  
-  constexpr Attr():iNode(-1) {}
-  
-  constexpr Attr(int iNode, const Symbol &name, const Symbol &value):
-  iNode(iNode), name(name), value(value) {}
-  
-  constexpr Attr(const Attr &a):iNode(a.iNode), name(a.name), value(a.value){}
-};
-
-struct Node
-{
-  /*
-   * 
-   * Represents a multiway tree 
-   * 
-   * Each node has two pointers 
-   * sibling -> 
-   * and 
-   * child |
-   * 
-   * Two symbols, tag and text represent the tagname and the text content if any
-   * 
-   * For example
-   * <HTML>
-   *  <DIV>
-   *  </DIV>
-   *  <DIV>
-   *    <P>Hello</P>
-   *  </DIV>
-   *  <DIV>
-   *  </DIV>
-   * </HTML>
-   * 
-   * 
-   * HTML-> -1
-   * |
-   * DIV -> DIV ->  DIV -> -1
-   * |      |       |
-   * NULL   P->-1   -1
-   * 
-   * Since this is meant to be a compile time DS, pointers sibling and child are just ints
-   * They index into an array of fixed size
-   * 
-   * Attributes are nested as children under <_ATTR>
-   * Styles are nested under <_ATTR><_STYLE></_STYLE></_ATTR>
-   * 
-   */
-  
-  constexpr Node():sibling(-1), child(-1), tag(), text(), id() {}
-  constexpr Node(const Node &n):
-  sibling(n.sibling), child(n.child), tag(n.tag), text(n.text), id(n.id) {}
-  
-  // returns the tag in uppercase
-  const string getTag() const 
-  {
-    string ret(tag.pBeg, tag.size());
-    transform(begin(ret), end(ret), begin(ret), toUpper);
-    return ret;
-  };
-  
-    
-  // Returns the text content, optionally stripping leading and trailing space
-  const string getText(bool trim = false) const 
-  {
-    auto b = text.pBeg, e = text.pEnd;
-    if(trim && b != e)
-    {
-      while(isSpace(*b)) b++;
-      while(e >= b && isSpace(e[-1])) e--;
-    }
-    
-    return string(b, e);
-  };
-  
-  int sibling;
-  int child;
-  Symbol tag;
-  Symbol text;
-  Symbol id;
-};
-
-typedef Array<Attr, 256> Attrs;
-typedef Array<Node, 1024> Nodes;
-
-struct SPT 
-{
-  static void dumpNode(const Nodes &nodes, int index, int indent)
-  {
-    const Node &node = nodes[index];
-    string sIndent = string(indent * 2, ' ');
-    cerr << sIndent << "<" << node.getTag() << ">";
-    if(node.child > -1)
-    {
-      cerr << endl;
-      dumpNode(nodes, node.child, indent + 1);
-    }
-    else
-    {
-      cerr << node.getText();
-    }
-    
-    // Skip close tag for void tags
-    if(node.getTag().back() != '/')
-    {
-      cerr << "</" << node.getTag() << ">" << endl;
-    }
-    else
-    {
-      cerr << endl;
-    }
-    
-    if(node.sibling > -1)
-    {
-      dumpNode(nodes, node.sibling, indent);
-    }
-  }
-  
-  static void dumpNodeRaw(const Nodes &nodes, int n)
-  {
-    for(int i = 0; i < n; ++i)
-    {
-      const Node &n = nodes[i];
-      cerr << i << endl;
-      cerr << "tag:" << n.getTag() << endl;
-      cerr << "sibling:" << n.sibling << endl;
-      cerr << "child:" << n.child << endl;
-      cerr << "text:" << n.getText() << endl;
-      cerr << endl;
-    }
-  }
-  
-  static void dumpAttrs(const Attrs &attrs)
-  {
-    for(int i = 0; i < attrs.size; ++i)
-    {
-      const Attr &attr = attrs[i];
-      cerr << attr.name.getText() << "=" << attr.value.getText() << endl;
-    }
-  }
-};
-
-constexpr bool isAlpha(char ch)
-{
-  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'); 
-}
-
-constexpr bool isNum(char ch)
-{
-  return (ch >= '0' && ch <= '9'); 
-}
-
-constexpr bool isAttr(char ch)
-{
-  return isAlpha(ch) || ch=='-'; 
-}
-
-constexpr bool isAttrVal(char ch)
-{
-  return isAlpha(ch) || isNum(ch); 
-}
-
-// Compare s1 and s2
-// assumes s2 has a NUL terminator, but s1 may not
-constexpr int cmpCaseLess(const char *s1, const char *s2)
-{
-  while(toUpper(*s1) == toUpper(*s2)) 
-  {
-    s1++;
-    s2++;
-  }  
-  
-  if(!*s2) return 0;
-  
-  return toUpper(*s1) < toUpper(*s2) ? -1 : 1;
-}
-
-// Compare s1 and s2 with case sensitivity
-// assumes s2 has a NUL terminator, but s1 may not
-constexpr int cmpCase(const char *s1, const char *s2)
-{
-  while(*s1 == *s2) 
-  {
-    s1++;
-    s2++;
-  }  
-  
-  if(!*s2) return 0;
-  
-  return toUpper(*s1) < toUpper(*s2) ? -1 : 1;
-}
-
-
-// Checks if tag[0..len) matches any entry in the tags array
-constexpr int findTag(const char *const tags[], int nTags, const char *tag)
-{
-  int left = 0;
-  int right = nTags;
-  
-  while(left < right)
-  {
-    int mid = (left + right) / 2;
-    int cmp = cmpCaseLess(tag, tags[mid]);
-    
-    if(cmp > 0)
-    {
-      left = mid + 1;
-    }
-    else if(cmp < 0)
-    {
-      right = mid;
-    }
-    else
-    {
-      return mid;
-    }
-  }
-  
-  return -1;
-}
-
-constexpr const Symbol g_symID{"id"};
-
-// Represents the state of the parser
-struct SPTParser
-{
-  Nodes nodes;
-  SymTable ids;
-  
-  constexpr SPTParser(const char *pszText): pszText(pszText), start(pszText) {}
-  constexpr SPTParser(): pszText(), start() {}
+  constexpr parser(const char *pszText): pszText(pszText), pszStart(pszText) {}
+  constexpr parser(): pszText(), pszStart() {}
   
   // HTML     :: TAG | HTML TAG
   // TAG      :: OPENTAG CONTENT CLOSETAG
@@ -445,16 +49,16 @@ struct SPTParser
   // OPENTAG  :: "<" TAGNAME ">"
   // CLOSETAG :: "<" TAGNAME "/>"
   // iParentIDX is the index of the oute node whose contents we are parsing
-  constexpr const void parseHTML(int iParentIDX)
+  constexpr const void parse_html(int iParentIDX)
   {
     // If its an open tag
-    if(isOpenTag())
+    if(is_open_tag())
     {
       // Get this parents eldest sibling if any (could be the ATTR node)
       int iParentsEldest = iParentIDX > -1 ? nodes[iParentIDX].child : -1;
       
       // If iParentsEldest exists, then the first sibling is it
-      int nYoungestSibling = iParentsEldest == -1 ? nodes.size : iParentsEldest;
+      int nYoungestSibling = iParentsEldest == -1 ? nodes.size() : iParentsEldest;
       
       // If there was a child for this parent set the siblings count
       int nSiblings = iParentsEldest == -1 ? 0 : 1;
@@ -463,33 +67,33 @@ struct SPTParser
       do
       {
         // Parse the open tag, get its index
-        auto attrs = parseOpenTag();
-        int iCurIdx = nodes.curr();
-        const Symbol &symTag = nodes[iCurIdx].tag;
+        auto attrs = parse_open_tag();
+        int iCurIdx = nodes.back_index();
+        const char_view &symTag = nodes[iCurIdx].tag;
         
         // The first attribute node will be at iCurIdx + 1
-        if(attrs.size)
+        if(attrs.size())
         {
           // Create a node called <@ATTR>, make it the first child
-          Node &node = newNode();
-          node.tag = Symbol("@ATTR");
-          int iAttrNode = nodes.curr();
+          cnode &node = new_node();
+          node.tag = char_view("@ATTR");
+          int iAttrNode = nodes.back_index();
           nodes[iCurIdx].child = iAttrNode;
           
           // For each attribute, make a node
           int nAttr = 0;
           for(const auto &attr: attrs)
           {
-            Node &node = newNode();
+            cnode &node = new_node();
             node.tag = attr.name;
             node.text = attr.value;
             if(!nAttr++)
             {
-              nodes[iAttrNode].child = nodes.curr();
+              nodes[iAttrNode].child = nodes.back_index();
             }
             else
             {
-              nodes[nodes.curr()-1].sibling = nodes.curr();
+              nodes[nodes.back_index()-1].sibling = nodes.back_index();
             }
           }
         }
@@ -510,20 +114,20 @@ struct SPTParser
         }
         
         // If this is a void tag, no need to parse children or close tag
-        if(symTag.pEnd[-1] != '/')
+        if(symTag.m_pEnd[-1] != '/')
         {
           // Recursively parse the content inside
-          parseHTML(iCurIdx);
+          parse_html(iCurIdx);
           
           // Parse the close tag
-          parseCloseTag(symTag);
+          parse_close_tag(symTag);
         }
         else // eat up any whitespace
         {
-          eatSpace();
+          eat_space();
         }
       }
-      while(isOpenTag());
+      while(is_open_tag());
     }
     else // Has to be text content
     {
@@ -532,20 +136,20 @@ struct SPTParser
         PARSE_ERR("Expecting an open tag at top level");
       }
       
-      parseTagContent(iParentIDX);
+      parse_tag_content(iParentIDX);
     }
   }
   
   
 private:
   const char *pszText;  // Position in the stream
-  const char *start;
+  const char *pszStart;
   
   // Return line number of current poistion
-  constexpr int curLine() const
+  constexpr int cur_line() const
   {
     int n = 0;
-    auto p = start;
+    auto p = pszStart;
     while(p != pszText)
     {
       if(*p++ == '\n') ++n;
@@ -554,9 +158,9 @@ private:
   }
   
   // Advances the free node pointer with bounds check
-  constexpr Node& newNode() 
+  constexpr cnode& new_node() 
   { 
-    if(!nodes.add())
+    if(!nodes.extend())
     {
       PARSE_ERR("Too many nodes");
     }
@@ -565,7 +169,7 @@ private:
   } 
   
   // Raises compiletime error if no more characters left to parse
-  constexpr void checkEOS()
+  constexpr void check_eos()
   {
     bool eos = !*pszText;
     if(eos) 
@@ -575,21 +179,21 @@ private:
   }
   
   // Advances to first non-whitespace character
-  constexpr void eatSpace()
+  constexpr void eat_space()
   {
-    while(isSpace(*pszText)) ++pszText;
+    while(is_space(*pszText)) ++pszText;
   }
   
   // Consumes [a-z]+
-  template<typename F> constexpr const Symbol eatAlpha(F isX)
+  template<typename F> constexpr const char_view eat_alpha(F isX)
   {
     // Ensure not EOS
-    checkEOS();
+    check_eos();
     
-    Symbol sym;
-    sym.pBeg = pszText;
-    sym.pEnd = pszText;
-    while(isX(*sym.pEnd)) sym.pEnd++;
+    char_view sym;
+    sym.m_pBeg = pszText;
+    sym.m_pEnd = pszText;
+    while(isX(*sym.m_pEnd)) sym.m_pEnd++;
     
     // Ensure at least 1 character is consumed
     if(sym.empty()) 
@@ -597,12 +201,12 @@ private:
       PARSE_ERR("Expecting an identifier");
     }
     
-    pszText = sym.pEnd;
+    pszText = sym.m_pEnd;
     return sym;
   }
   
   // Tries to consume the string pszSym
-  constexpr const bool eatRaw(const char *pszSym)
+  constexpr const bool eat_str(const char *pszSym)
   {
     // As long as we dont hit the end
     while(*pszSym)
@@ -619,7 +223,7 @@ private:
       // Ensure we are not at end of stream before the symbol has been compared fully
       if(*pszSym)
       {
-        checkEOS();
+        check_eos();
       }
     }
     
@@ -627,19 +231,19 @@ private:
   }
   
   // Tries to consume the characters in [sym.pBeg, sym.pEnd)
-  constexpr bool eatSym(const Symbol &sym)
+  constexpr bool eat_symbol(const char_view &sym)
   {
-    auto p = sym.pBeg;
-    while(p != sym.pEnd)
+    auto p = sym.m_pBeg;
+    while(p != sym.m_pEnd)
     {
-      if(toUpper(*p) != toUpper(*pszText)) return false;    
+      if(to_upper(*p) != to_upper(*pszText)) return false;    
       ++p;
       ++pszText;
       
       // Ensure we are not at end of stream before the symbol has been compared fully
-      if(p != sym.pEnd)
+      if(p != sym.m_pEnd)
       {
-        checkEOS();
+        check_eos();
       }
     }
     
@@ -647,34 +251,34 @@ private:
   }
   
   // Consume stuff until ch is encountered
-  constexpr const Symbol eatUntil(char ch, const bool *unExpected)
+  constexpr const char_view eat_until(char ch, const bool *unExpected)
   {
-    Symbol sym;
-    sym.pBeg = pszText;
-    sym.pEnd = pszText;
-    while(*sym.pEnd && *sym.pEnd != ch) 
+    char_view sym;
+    sym.m_pBeg = pszText;
+    sym.m_pEnd = pszText;
+    while(*sym.m_pEnd && *sym.m_pEnd != ch) 
     {
-      if(unExpected && unExpected[int(*sym.pEnd)])
+      if(unExpected && unExpected[int(*sym.m_pEnd)])
       {
         PARSE_ERR("Unexpected character inside tag content");
       }
-      sym.pEnd++;
+      sym.m_pEnd++;
     }
     
-    pszText = sym.pEnd;
+    pszText = sym.m_pEnd;
     return sym;
   }
   
   // Checks if we have an open tag at p
-  constexpr bool isOpenTag()
+  constexpr bool is_open_tag()
   {
     auto saved = pszText;
-    eatSpace();
+    eat_space();
     if(*pszText && *pszText++ == '<')
     {
       if(*pszText)
       {
-        if(isAlpha(*pszText)) 
+        if(is_alpha(*pszText)) 
         {
           pszText = saved;
           return true;
@@ -695,14 +299,14 @@ private:
   }
   
   // Checks if we have a close tag at state.text
-  constexpr bool isCloseTag()
+  constexpr bool is_close_tag()
   {
     auto p = pszText;
     if(*p && *p++ == '<')
     {
       if(*p && *p++ == '/')
       {
-        return isAlpha(*p);
+        return is_alpha(*p);
       }
     }
     return false;
@@ -710,18 +314,18 @@ private:
   
   // Parses one attribute like NAME=VALUE
   // NAME is a sequence of [a-z\-] and VALUE is "text", 'text' or {text}
-  constexpr bool parseAttrs(Array<Attr, 32> &attrs)
+  constexpr bool parse_attrs(array<attr, 32> &attrs)
   {
     // Swallow any space
-    eatSpace();
-    checkEOS();
+    eat_space();
+    check_eos();
     
-    if(isAlpha(*pszText))
+    if(is_alpha(*pszText))
     { 
       // Get the attr name
-      Symbol name = eatAlpha(isAttr); 
+      char_view name = eat_alpha(is_attr); 
       
-      if(!eatRaw("="))
+      if(!eat_str("="))
       {
         PARSE_ERR("Expecting '=' after attribute name");
       }
@@ -745,9 +349,9 @@ private:
           PARSE_ERR("Expecting open quote or '{' for attribute value");
       }
       
-      checkEOS();
+      check_eos();
       
-      Symbol value = eatUntil(close, nullptr);
+      char_view value = eat_until(close, nullptr);
       if(value.empty())
       {
         PARSE_ERR("Empty value for attribute");
@@ -756,7 +360,7 @@ private:
       pszText++;
       
       // Swallow any space
-      eatSpace();
+      eat_space();
       
       // Is it an ID tag
       int cmp = name.cmpCaseLess(g_symID); 
@@ -771,12 +375,12 @@ private:
       }
       else
       {
-        if(!attrs.add())
+        if(!attrs.extend())
         {
           PARSE_ERR("Too many attributes");
         }
         
-        Attr &attr = attrs.back();
+        attr &attr = attrs.back();
         attr.name = name;
         attr.value = value;
       }
@@ -792,63 +396,63 @@ private:
   // Parse "<TAG>", ignores leading whitespace
   // https://www.w3.org/TR/REC-xml/#sec-starttags
   // No space allowed between < and tag name
-  constexpr Array<Attr, 32> parseOpenTag()
+  constexpr array<attr, 32> parse_open_tag()
   {
     DUMP << "Parsing open tag ..." << ENDL;
-    DUMP << "Node size = " << nodes.size << ENDL;
+    DUMP << "Node size = " << nodes.size() << ENDL;
     
     // Left trim whitespace
-    eatSpace();
-    checkEOS();
+    eat_space();
+    check_eos();
     
     // Try to parse the "<"
-    if(!eatRaw("<")) 
+    if(!eat_str("<")) 
     {
       PARSE_ERR("Missing <");
     }
     
     // Bump the free node index
-    Node &node = newNode();
+    cnode &node = new_node();
     
     // Try to parse an [a-z]+ as a tag
-    Symbol &sym = node.tag = eatAlpha(isAlpha);
+    char_view &sym = node.tag = eat_alpha(is_alpha);
     
     //DUMP << sym.getText() << ENDL;
     
     // Eat any trailing whitespace
-    eatSpace();
+    eat_space();
     
     // Check if valid tag
     const int nTags = sizeof(arrTags)/sizeof(arrTags[0]);
-    if(findTag(arrTags, nTags, sym.pBeg) == -1)
+    if(find_arr(arrTags, nTags, sym.m_pBeg) == -1)
     {
       PARSE_ERR("Unknown tag name");
     }
     
     // Parse attributes
-    Array<Attr, 32> attrs;
-    while(parseAttrs(attrs));
+    array<attr, 32> attrs, styles;
+    while(parse_attrs(attrs));
     
     // Check if void tag
     const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
-    const int idx = findTag(arrVoidTags, nVoidTags, sym.pBeg);
+    const int idx = find_arr(arrVoidTags, nVoidTags, sym.m_pBeg);
     
     if(idx != -1)
     {
       // Void tag, add the "/" too
-      eatSpace();
+      eat_space();
       
       // Bump up the symbol end, so the parser can check for a trailing / and not look for a close tag
-      sym.pEnd = pszText + 1;
+      sym.m_pEnd = pszText + 1;
       
-      if(!eatRaw("/")) 
+      if(!eat_str("/")) 
       {
         PARSE_ERR("Missing / on a void tag");
       }
     }
 
     // Grab the final >
-    if(!eatRaw(">")) 
+    if(!eat_str(">")) 
     {
       if(idx != -1)
       {
@@ -864,16 +468,16 @@ private:
   }
   
   // Attempts to parse "</TAG>" given "TAG"
-  constexpr void parseCloseTag(const Symbol &symExpected)
+  constexpr void parse_close_tag(const char_view &symExpected)
   {
     // Try to parse the "</"
-    if(!eatRaw("</")) 
+    if(!eat_str("</")) 
     {
       PARSE_ERR("Expecting a close tag");
     }
     
     // Try to parse the tag name
-    Symbol sym = eatAlpha(isAlpha);
+    char_view sym = eat_alpha(is_alpha);
     if(sym != symExpected) 
     {
       PARSE_ERR("Mismatched Close Tag");
@@ -882,60 +486,57 @@ private:
     //DUMP << "Close " << sym.getText() << ENDL;
     
     // Ignore space, parse >
-    eatSpace();
-    if(!eatRaw(">")) 
+    eat_space();
+    if(!eat_str(">")) 
     {
       PARSE_ERR("Missing > in close tag");
     }
     
     // Eat trailing space
-    eatSpace();
+    eat_space();
   }
 
   // Parses all text content until a "<" is hit 
-  constexpr void parseTagContent(int iParentIDX)
+  constexpr void parse_tag_content(int iParentIDX)
   {
     // make sure we have something
-    checkEOS();
+    check_eos();
     
     // Try to parse until a "<", forbid & and >
     bool contentUnexpectedChars[256] = {0};
     contentUnexpectedChars[int('>')] = true;
     contentUnexpectedChars[int('&')] = true;
-    nodes[iParentIDX].text = eatUntil('<', contentUnexpectedChars);
+    nodes[iParentIDX].text = eat_until('<', contentUnexpectedChars);
     
     // Make sure we have something left
-    checkEOS();
+    check_eos();
   }
   
 };
 
-
-constexpr SPTParser operator"" _html(const char *pszText, size_t)
+// Runtime multiway tree node
+class rnode
 {
-  SPTParser parser(pszText);
-  parser.parseHTML(-1);
-  return parser;
-}
-
-struct SPTNode
-{
-  typedef map<string, string> AttrDict; 
-  vector<SPTNode> children;
-  AttrDict attrs;
-  string tag, text, id;
+  friend struct tree;
+  
+  typedef map<string, string> attr_dict; 
+  
+  // children if any
+  vector<rnode> children;
+  
+  // attributes of this node
+  attr_dict attrs;
+  
+  // node tag, content text and id
+  char_view tag, text, id;
+  
+  // If content is a 
+  
   int index;
   
-  SPTNode(const string &tag, const string &text, int index) : tag(tag), text(text), index(index) {}
-  
-  static SPTNode from(const SPTParser &parser)
-  {
-    // Construct a map of node ID to attr list
-    
-    SPTNode root("HTML", "", -1);
-    build(parser, root, 0);
-    return root;
-  }
+public:
+  rnode(const char_view &tag, const char_view &text, int index) : tag(tag), text(text), index(index) {}
+  rnode():index(-1){}
   
   void dump(ostream &ostr, int indent = 0) const
   {
@@ -967,7 +568,7 @@ struct SPTNode
     // Skip text and close tag for void tags
     if(tag.back() != '/')
     {
-      if(text.length())
+      if(text.size())
       {
         ostr << "\n" << sIndent << text << "\n";
       }
@@ -980,32 +581,47 @@ struct SPTNode
   }
   
 private:
-  static void build(const SPTParser &parser, SPTNode &parent, int index)
+};
+
+// Encapsulates the runtime DOM tree including templates
+struct tree
+{
+  rnode root;
+  template_dict templates;
+  
+  // Takes the compile time parser data and constructs thr runtime node tree 
+  // Also generates a map for templates 
+  tree(const parser &parser): root("HTML", "", -1)
+  {
+    build(parser, root, templates, 0);
+  }
+  
+  // Recursively builds the runtime tree structure from the compile time parser
+  // Detects strings of the form {{key}} inside node content and adds it to a template_dict
+  static void build(const parser &parser, rnode &parent, template_dict &dctTemplates, int index)
   {
     // Get the node tag and content
-    const Node &node = parser.nodes[index];
-    auto &tag = node.getTag();
-    auto &text = node.getText(tag != "PRE");
+    const cnode &cNode = parser.nodes[index];
     
     // Create a SPTNode and set ID if any
-    SPTNode sptNode(tag, text, index);
-    if(node.id.size())
+    rnode rNode(cNode.tag, cNode.text, index);
+    if(cNode.id.size())
     {
-      sptNode.id = node.id.getText();
+      rNode.id = cNode.id;
     }
     
     // Place this node as a child of the parent
-    parent.children.emplace_back(sptNode);
+    parent.children.emplace_back(rNode);
     
-    // If there are children for thios node
-    if(node.child > -1)
+    // If there are children for this node
+    if(cNode.child > -1)
     {
       // Check if first child is "@ATTR"
-      const Node &child = parser.nodes[node.child];
+      const auto &child = parser.nodes[cNode.child];
       if(child.getTag() == "@ATTR")
       {
         // Put the chain of attribute nodes into ther attrs array
-        Node attr = parser.nodes[child.child];
+        auto attr = parser.nodes[child.child];
         while(1)
         {
           parent.children.back().attrs[attr.getTag()] = attr.getText();
@@ -1016,21 +632,30 @@ private:
         // If there were more nodes after @ATTR, recursively process them
         if(child.sibling > -1)
         {
-          build(parser, parent.children.back(), child.sibling);
+          build(parser, parent.children.back(), dctTemplates, child.sibling);
         }
       }
       else // No @ATTR
       {
         // Process children 
-        build(parser, parent.children.back(), node.child);
+        build(parser, parent.children.back(), dctTemplates, cNode.child);
       }
     }
     
     // Process siblings
-    if(node.sibling > -1)
+    if(cNode.sibling > -1)
     {
-      build(parser, parent, node.sibling);
+      build(parser, parent, dctTemplates, cNode.sibling);
     }
   }
 };
 
+
+}
+
+constexpr spt::parser operator"" _html(const char *pszText, size_t)
+{
+  spt::parser parser(pszText);
+  parser.parse_html(-1);
+  return parser;
+}
