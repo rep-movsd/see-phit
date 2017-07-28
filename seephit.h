@@ -12,6 +12,9 @@ using std::string;
 using std::vector;
 using std::pair;
 using std::map;
+
+using std::find;
+
 using std::ostream;
 using std::cerr;
 using std::endl;
@@ -514,7 +517,7 @@ private:
   
 };
 
-// Runtime multiway tree node
+// Runtime tree node
 class rnode
 {
   friend struct tree;
@@ -530,15 +533,68 @@ class rnode
   // node tag, content text and id
   char_view tag, text, id;
   
-  // If content is a 
+  // If content has template tags of the form {{key}}, store them in this
+  template_text templates;
   
   int index;
   
 public:
-  rnode(const char_view &tag, const char_view &text, int index) : tag(tag), text(text), index(index) {}
-  rnode():index(-1){}
+  rnode(): index(-1){}
+
+  rnode(const char_view &tag, const char_view &text, int index, template_dict &dctTemplates) 
+    : tag(tag), text(text), index(index) 
+  {
+    // Iterate through the text and detect if we have a template strings
+    const char *szOpen = "{{";
+    const char *szClose = "}}";
+    
+    auto itCurr = text.begin();
+    do
+    {
+      // Find a "{{"
+      auto itStart = std::search(itCurr, text.end(), szOpen, szOpen + 2);
+      
+      // The part from itCurr to itStart is a non template chunk iff itCurr != itStart
+      if(itCurr != itStart)
+      {
+        templates.add(char_view(itCurr, itStart), false);
+        itCurr = itStart;
+      }
+      
+      // Now either itStart is at {{ or its text.end()
+      if(itStart != text.end())
+      {
+        // find the closing }}, if found add this chunk as a template
+        auto itEnd = std::search(itStart, text.end(), szClose, szClose + 2);
+        if(itEnd != text.end())
+        {
+          // Check if non empty tag
+          if((itEnd - itStart) > 2)
+          {
+            char_view sKey(itStart + 2, itEnd);
+            templates.add(sKey, true);
+            dctTemplates[string(sKey.begin(), sKey.end())] = "";
+          }
+          else
+          {
+            cerr << "Found an empty template tag {{}}";
+          }
+          
+          // Set the current pointer beyond the template }}
+          itCurr = itEnd + 2;
+        }
+        else  
+        {
+          // Set the current pointer to the end;
+          itCurr = text.end();
+        }
+      }
+    } 
+    while(itCurr != text.end());
+  }
   
-  void dump(ostream &ostr, int indent = 0) const
+  
+  void dump(ostream &ostr, const template_dict &dctTemplates, int indent = 0) const
   {
     string sIndent = string(indent * 2, ' ');
     ostr << sIndent << "<" << tag;
@@ -562,15 +618,17 @@ public:
     
     for(const auto& child: children)
     {
-      child.dump(ostr, indent + 1);
+      child.dump(ostr, dctTemplates, indent + 1);
     }
     
     // Skip text and close tag for void tags
     if(tag.back() != '/')
     {
-      if(text.size())
+      if(templates.parts().size())
       {
-        ostr << "\n" << sIndent << text << "\n";
+        ostr << "\n" << sIndent;
+        templates.render(ostr, dctTemplates);
+        ostr << "\n";
       }
       ostr << sIndent << "</" << tag << ">" << "\n";
     }
@@ -591,7 +649,7 @@ struct tree
   
   // Takes the compile time parser data and constructs thr runtime node tree 
   // Also generates a map for templates 
-  tree(const parser &parser): root("HTML", "", -1)
+  tree(const parser &parser): root("HTML", "", -1, templates)
   {
     build(parser, root, templates, 0);
   }
@@ -604,7 +662,7 @@ struct tree
     const cnode &cNode = parser.nodes[index];
     
     // Create a SPTNode and set ID if any
-    rnode rNode(cNode.tag, cNode.text, index);
+    rnode rNode(cNode.tag, cNode.text, index, dctTemplates);
     if(cNode.id.size())
     {
       rNode.id = cNode.id;
@@ -650,8 +708,7 @@ struct tree
   }
 };
 
-
-}
+} // namespace spt
 
 constexpr spt::parser operator"" _html(const char *pszText, size_t)
 {

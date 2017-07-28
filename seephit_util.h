@@ -206,13 +206,20 @@ inline ostream& operator<<(ostream &ostr, const char_view &sym)
 
 // Abstracts templatable text
 // A Sequence of char_view, pointing to eitehr plain text or template keys
-struct template_text
+class template_text
 {
   // A sequence of char ranges, bool indicates if its a template
   // The ranges exclude the {{ and }} parts for template strings
-  array<pair<char_view, bool>, 16> m_arrParts;
+  vector<pair<char_view, bool>> m_arrParts;
   
-  void render(ostream &ostr, const template_dict& dctTemplates)
+public:
+  
+  void add(const char_view &sym, bool bIsTemplate)
+  {
+    m_arrParts.push_back(std::make_pair(sym, bIsTemplate));
+  }
+  
+  void render(ostream &ostr, const template_dict& dctTemplates) const
   {
     // Render each part
     for(const auto &part: m_arrParts)
@@ -225,7 +232,8 @@ struct template_text
         auto i = dctTemplates.find(sKey);
         if(i == dctTemplates.end())
         {
-          throw string("Template key undefined:") + sKey;
+          cerr << endl << "Template key undefined: '" << sKey << "'" << endl;
+          throw false;
         }
         
         ostr << i->second;
@@ -236,6 +244,9 @@ struct template_text
       }
     }
   }
+  
+  vector<pair<char_view, bool>> parts() const { return m_arrParts; }
+  
 };
 
 // Simple abstraction for a symbol table

@@ -5,9 +5,25 @@ using namespace std;
 int main()
 {
   constexpr auto parser =
-    #include "test/valid.spt"
+    #include "test/valid2.spt"
   
   //SPTDumper::dumpNode(parser.nodes);
   spt::tree spt_tree(parser);
-  spt_tree.root.dump(cerr);
+  
+  spt::template_dict dct;
+  dct["name"] = "Mary";
+  dct["profession"] = "doctor";
+  dct["city"] = "London";
+  
+  spt_tree.root.dump(cerr, dct);
+  cerr << endl;
+  
+  dct["city"] = "New York";
+  dct["name"] = "John";
+  dct["profession"] = "janitor";
+
+  spt_tree.root.dump(cerr, dct);
+  cerr << endl;
+  
+  
 }
