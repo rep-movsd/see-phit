@@ -11,63 +11,66 @@ Before constexpr, the way to make C++ DSLs was by (ab)using operator overloading
  
 
 Example:
+``` cpp
+#include <iostream>
+#include "seephit.h"
+using namespace std;
 
-    #include <iostream>
-    #include "seephit.h"
-    using namespace std;
+int main()
+{
+  constexpr auto parser =
+  R"*(
+    <span >
+    <p  color="red" height='10' >{{name}} is a {{profession}} in {{city}}</p  >
+    </span>
+    )*"_html;
 
-    int main()
-    {
-      constexpr auto parser =
-      R"*(
-        <span >
-        <p  color="red" height='10' >{{name}} is a {{profession}} in {{city}}</p  >
-        </span>
-        )*"_html;
+  spt::tree spt_tree(parser);
+  
+  spt::template_dict dct;
+  dct["name"] = "Mary";
+  dct["profession"] = "doctor";
+  dct["city"] = "London";
+  
+  spt_tree.root.dump(cerr, dct);
+  cerr << endl;
+  
+  dct["city"] = "New York";
+  dct["name"] = "John";
+  dct["profession"] = "janitor";
 
-      spt::tree spt_tree(parser);
-      
-      spt::template_dict dct;
-      dct["name"] = "Mary";
-      dct["profession"] = "doctor";
-      dct["city"] = "London";
-      
-      spt_tree.root.dump(cerr, dct);
-      cerr << endl;
-      
-      dct["city"] = "New York";
-      dct["name"] = "John";
-      dct["profession"] = "janitor";
+  spt_tree.root.dump(cerr, dct);
+  cerr << endl;
+} 
+```
 
-      spt_tree.root.dump(cerr, dct);
-      cerr << endl;
-    } 
-    
 produces the following output
+``` html
+<HTML>
+  <span>
+    <p COLOR='red' HEIGHT='10'>
+    Mary is a doctor in London
+    </p>
+  </span>
+</HTML>
 
-    <HTML>
-      <span>
-        <p COLOR='red' HEIGHT='10'>
-        Mary is a doctor in London
-        </p>
-      </span>
-    </HTML>
-
-    <HTML>
-      <span>
-        <p COLOR='red' HEIGHT='10'>
-        John is a janitor in New York
-        </p>
-      </span>
-    </HTML>
-    
+<HTML>
+  <span>
+    <p COLOR='red' HEIGHT='10'>
+    John is a janitor in New York
+    </p>
+  </span>
+</HTML>
+```
 The program will fail to compile if the HTML is malformed - We attempt to make the compiler generate the most sensible error message: 
 
 For example, the following fragment:
     
-    <DIV>
-    This is a bad closing tag
-    </DIVV>
+``` html
+<DIV>
+This is a bad closing tag
+</DIVV>
+```
 
 Generates the compiler errors in gcc:
 
