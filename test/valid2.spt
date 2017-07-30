@@ -1,5 +1,10 @@
 R"*(
 <span >
-  <p  color="red" height='1' weight={test} >{{name}} is a {{profession}} in {{city}}</p  >
+  <pre  color="red" height='1' weight={test} >
+  
+{{name}} is a {{profession}}
+{{name}} lives in {{city}}
+  
+  </pre  >
 </span>
 )*"_html; 

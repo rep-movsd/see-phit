@@ -16,6 +16,15 @@ constexpr char to_upper(char ch)
   return ch;
 }
 
+constexpr char to_lower(char ch)
+{
+  if(ch >= 'A' && ch <= 'Z')
+  {
+    return ch + 'a' - 'A';
+  }
+  return ch;
+}
+
 constexpr bool is_space(char ch)
 {
   return ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t';
@@ -45,7 +54,7 @@ constexpr bool is_attrval(char ch)
 // assumes s2 has a NUL terminator, but s1 may not
 constexpr int comparei(const char *s1, const char *s2)
 {
-  while(to_upper(*s1) == to_upper(*s2)) 
+  while(to_lower(*s1) == to_lower(*s2)) 
   {
     s1++;
     s2++;
@@ -53,7 +62,7 @@ constexpr int comparei(const char *s1, const char *s2)
   
   if(!*s2) return 0;
   
-  return to_upper(*s1) < to_upper(*s2) ? -1 : 1;
+  return to_lower(*s1) < to_lower(*s2) ? -1 : 1;
 }
 
 // Compare s1 and s2 with case sensitivity
@@ -68,7 +77,7 @@ constexpr int compare(const char *s1, const char *s2)
   
   if(!*s2) return 0;
   
-  return to_upper(*s1) < to_upper(*s2) ? -1 : 1;
+  return to_lower(*s1) < to_lower(*s2) ? -1 : 1;
 }
 
 // Checks if val matches any entry in the array arr
@@ -99,10 +108,10 @@ constexpr int find_arr(const char *const arr[], int nTags, const char *val)
   return -1;
 }
 
-// Simple abstraction for consexpr friendly arrays
+// Simple abstraction for consexpr friendly dynamic arrays
 // Supports a basic STL like interface
 template<typename T, int SIZE> 
-class array
+class vec
 {
   size_t m_uSize = 0;
   const size_t m_iCapacity = SIZE;
@@ -111,12 +120,16 @@ class array
 public:
   constexpr T& operator[](size_t i)             { return m_Nodes[i]; }
   constexpr const T& operator[](size_t i) const { return m_Nodes[i]; }
-  constexpr T* begin()                          { return m_Nodes; }
-  constexpr T* end()                            { return m_Nodes + m_uSize; }
-  constexpr T& back()                           { return m_Nodes[m_uSize - 1]; }
-  constexpr size_t size() const                 { return m_uSize; }
-  constexpr size_t back_index() const           { return m_uSize - 1;}
-  constexpr bool extend()                       { return (m_uSize++) < m_iCapacity; }
+  
+  constexpr T* begin()                  { return m_Nodes; }
+  constexpr T* end()                    { return m_Nodes + m_uSize; }
+                                        
+  constexpr const T* begin() const      { return m_Nodes; }
+  constexpr const T* end() const        { return m_Nodes + m_uSize; }
+                                        
+  constexpr T& back()                   { return m_Nodes[m_uSize - 1]; }
+  constexpr size_t size() const         { return m_uSize; }
+  constexpr int push_back(const T &val) { m_uSize++; back() = val; return m_uSize - 1;}
 };
 
 // Represents a string symbol - a pair of pointers into a const char* 
@@ -138,6 +151,7 @@ struct char_view
   constexpr const char *begin() const { return m_pBeg; }
   constexpr const char *end() const   { return m_pEnd; }
   constexpr char back() const         { return m_pEnd[-1]; }
+  constexpr char front() const        { return m_pBeg[0]; }
   constexpr bool empty() const        { return size() == 0; }
   
   constexpr bool operator==(const char_view &that) const
@@ -147,7 +161,7 @@ struct char_view
       auto p1 = m_pBeg, p2 = that.m_pBeg;
       while(p1 != m_pEnd)
       {
-        if(to_upper(*p1) != to_upper(*p2)) return false;
+        if(to_lower(*p1) != to_lower(*p2)) return false;
         ++p1;
         ++p2;
       }
@@ -170,8 +184,8 @@ struct char_view
     
     for(size_t i = 0; i < size(); ++i)
     {
-      char a = to_upper(m_pBeg[i]);
-      char b = to_upper(that.m_pBeg[i]);
+      char a = to_lower(m_pBeg[i]);
+      char b = to_lower(that.m_pBeg[i]);
       if(a < b) return -1;
       if(a > b) return 1;
     }
@@ -195,6 +209,13 @@ struct char_view
     return 0;
   }
   
+  // REmoves space from either side
+  constexpr void trim()
+  {
+    while(begin() < end() && is_space(front())) m_pBeg++;
+    while(end() > begin() && is_space( back())) m_pEnd--;
+  }
+  
 };
 
 // Ostream helper for above
@@ -210,7 +231,7 @@ class template_text
 {
   // A sequence of char ranges, bool indicates if its a template
   // The ranges exclude the {{ and }} parts for template strings
-  vector<pair<char_view, bool>> m_arrParts;
+  std::vector<pair<char_view, bool>> m_arrParts;
   
 public:
   
@@ -245,14 +266,14 @@ public:
     }
   }
   
-  vector<pair<char_view, bool>> parts() const { return m_arrParts; }
+  std::vector<pair<char_view, bool>> parts() const { return m_arrParts; }
   
 };
 
 // Simple abstraction for a symbol table
 struct sym_tab
 {
-  array<char_view, 1024> m_arrSyms;
+  vec<char_view, 1024> m_arrSyms;
   
   // Adds a symbol to the table, returns false if already exists
   constexpr bool addSym(const char_view &symNew)
@@ -261,24 +282,22 @@ struct sym_tab
     {
       if(symNew == sym) return false;
     }
-    m_arrSyms.extend();
-    m_arrSyms.back() = symNew;
+    m_arrSyms.push_back(symNew);
     return true;
   }
 };
 
 struct attr 
 {
-  int node;
+  //int node;
   char_view name;      
   char_view value;  
   
-  constexpr attr():node(-1) {}
+  constexpr attr(){}
+  constexpr attr(const char_view &name, const char_view &value):
+  name(name), value(value) {}
   
-  constexpr attr(int iNode, const char_view &name, const char_view &value):
-  node(iNode), name(name), value(value) {}
-  
-  constexpr attr(const attr &a):node(a.node), name(a.name), value(a.value){}
+  constexpr attr(const attr &a): name(a.name), value(a.value){}
 };
 
 struct cnode
@@ -320,15 +339,31 @@ struct cnode
    * 
    */
   
-  constexpr cnode():sibling(-1), child(-1), tag(), text(), id() {}
+  constexpr cnode(): sibling(-1), child(-1), tag(), text(), id() {}
   constexpr cnode(const cnode &n):
-  sibling(n.sibling), child(n.child), tag(n.tag), text(n.text), id(n.id) {}
+    sibling(n.sibling), child(n.child), tag(n.tag), text(n.text), id(n.id) {}
+    
+  constexpr cnode(const char_view &tag):
+    sibling(-1), child(-1), tag(tag), text(), id() {}
+
+  constexpr cnode(const char_view &tag, const char_view &text):
+    sibling(-1), child(-1), tag(tag), text(text), id() {}
+    
+    
+  void dump() const
+  {
+    cerr << "id=" << id << ",";
+    cerr << "sibling=" << sibling << ",";
+    cerr << "child=" << child << ",";
+    cerr << "tag=" << tag << ",";
+    cerr << "text=" << text << endl;
+  }
   
-  // returns the tag in uppercase
+  // returns the tag in lowercase
   const string getTag() const 
   {
     string ret(tag.m_pBeg, tag.size());
-    transform(begin(ret), end(ret), begin(ret), to_upper);
+    transform(begin(ret), end(ret), begin(ret), to_lower);
     return ret;
   };
   

@@ -4,8 +4,10 @@ using namespace std;
 
 int main()
 {
-  constexpr auto parser =
+  constexpr spt::parser parser =
     #include "test/valid2.spt"
+  
+  //parser.dump();
   
   //SPTDumper::dumpNode(parser.nodes);
   spt::tree spt_tree(parser);

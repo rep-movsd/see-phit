@@ -30,12 +30,14 @@ using std::endl;
 namespace spt
 {
 
-typedef array<attr, SPT_MAX_ATTRS> attrs;
-typedef array<cnode, SPT_MAX_NODES> cnodes;
+typedef vec<attr, SPT_MAX_ATTRS> attrs;
+typedef vec<cnode, SPT_MAX_NODES> cnodes;
 
 // Hardcoded symbols to detect id and style
 constexpr const char_view g_symID{"id"};
 constexpr const char_view g_symStyle{"style"};
+constexpr const char_view g_symAttr{"attr"};
+constexpr const char_view g_symPre{"pre"};
 
 // Compile time parser
 struct parser
@@ -51,52 +53,48 @@ struct parser
   // CONTENT  :: HTML | TEXT 
   // OPENTAG  :: "<" TAGNAME ">"
   // CLOSETAG :: "<" TAGNAME "/>"
-  // iParentIDX is the index of the oute node whose contents we are parsing
-  constexpr const void parse_html(int iParentIDX)
+  // iParentId is the index of the outer node whose contents we are parsing
+  constexpr const void parse_html(int iParentId)
   {
     // If its an open tag
     if(is_open_tag())
     {
-      // Get this parents eldest sibling if any (could be the ATTR node)
-      int iParentsEldest = iParentIDX > -1 ? nodes[iParentIDX].child : -1;
+      // Get this parents eldest child if any (could be the ATTR node)
+      int iEldestSibling = iParentId > -1 ? nodes[iParentId].child : -1;
       
-      // If iParentsEldest exists, then the first sibling is it
-      int nYoungestSibling = iParentsEldest == -1 ? nodes.size() : iParentsEldest;
+      // If there is no eldest iEldestSibling, then we are the first child
+      int iYoungestSibling = iEldestSibling == -1 ? nodes.size() : iEldestSibling;
       
       // If there was a child for this parent set the siblings count
-      int nSiblings = iParentsEldest == -1 ? 0 : 1;
+      int nSiblings = iEldestSibling == -1 ? 0 : 1;
       
       // Keep doing this in a loop
       do
       {
         // Parse the open tag, get its index
         auto attrs = parse_open_tag();
-        int iCurIdx = nodes.back_index();
-        const char_view &symTag = nodes[iCurIdx].tag;
+        int iCurrId = nodes.size() - 1;
+        const char_view &symTag = nodes[iCurrId].tag;
         
         // The first attribute node will be at iCurIdx + 1
         if(attrs.size())
         {
           // Create a node called <@ATTR>, make it the first child
-          cnode &node = new_node();
-          node.tag = char_view("@ATTR");
-          int iAttrNode = nodes.back_index();
-          nodes[iCurIdx].child = iAttrNode;
+          int iAttrNode = nodes.push_back(cnode(g_symAttr));
+          nodes[iCurrId].child = iAttrNode;
           
           // For each attribute, make a node
           int nAttr = 0;
           for(const auto &attr: attrs)
           {
-            cnode &node = new_node();
-            node.tag = attr.name;
-            node.text = attr.value;
+            int iBack = nodes.push_back(cnode(attr.name, attr.value));
             if(!nAttr++)
             {
-              nodes[iAttrNode].child = nodes.back_index();
+              nodes[iAttrNode].child = iBack;
             }
             else
             {
-              nodes[nodes.back_index()-1].sibling = nodes.back_index();
+              nodes[iBack-1].sibling = iBack;
             }
           }
         }
@@ -105,14 +103,15 @@ struct parser
         if(++nSiblings > 1)
         {
           // Set elder siblings sibling index to this one, this becomes the youngest
-          nodes[nYoungestSibling].sibling = iCurIdx;
-          nYoungestSibling = iCurIdx;
+          nodes[iYoungestSibling].sibling = iCurrId;
+          iYoungestSibling = iCurrId;
         }
         else // First child, set the parents child index to this if parent exists
         {
-          if(iParentIDX >= 0)
+          if(iParentId >= 0)
           {
-            nodes[iParentIDX].child = iCurIdx;
+            DUMP << "Setting child of " << iParentId << " to " << iCurrId << ENDL;
+            nodes[iParentId].child = iCurrId;
           }
         }
         
@@ -120,7 +119,7 @@ struct parser
         if(symTag.m_pEnd[-1] != '/')
         {
           // Recursively parse the content inside
-          parse_html(iCurIdx);
+          parse_html(iCurrId);
           
           // Parse the close tag
           parse_close_tag(symTag);
@@ -134,16 +133,27 @@ struct parser
     }
     else // Has to be text content
     {
-      if(iParentIDX == -1)
+      if(iParentId == -1)
       {
         PARSE_ERR("Expecting an open tag at top level");
       }
       
-      parse_tag_content(iParentIDX);
+      bool bTrim = nodes[iParentId].tag != g_symPre;
+      parse_tag_content(iParentId, bTrim);
     }
   }
   
-  
+ 
+  void dump() const 
+  {
+    int i = 0;
+    for(const auto &node: nodes)
+    {
+      cerr << "n=" << i++ << endl;
+      node.dump();
+    }
+  }
+ 
 private:
   const char *pszText;  // Position in the stream
   const char *pszStart;
@@ -159,17 +169,6 @@ private:
     }
     return n;
   }
-  
-  // Advances the free node pointer with bounds check
-  constexpr cnode& new_node() 
-  { 
-    if(!nodes.extend())
-    {
-      PARSE_ERR("Too many nodes");
-    }
-    
-    return nodes.back();
-  } 
   
   // Raises compiletime error if no more characters left to parse
   constexpr void check_eos()
@@ -317,7 +316,7 @@ private:
   
   // Parses one attribute like NAME=VALUE
   // NAME is a sequence of [a-z\-] and VALUE is "text", 'text' or {text}
-  constexpr bool parse_attrs(array<attr, 32> &attrs)
+  constexpr bool parse_attrs(vec<attr, 32> &attrs)
   {
     // Swallow any space
     eat_space();
@@ -378,17 +377,9 @@ private:
       }
       else
       {
-        if(!attrs.extend())
-        {
-          PARSE_ERR("Too many attributes");
-        }
-        
-        attr &attr = attrs.back();
-        attr.name = name;
-        attr.value = value;
+        attrs.push_back(attr(name, value));
+        DUMP << "Parsed attr " << name << "=" << value << ENDL;
       }
-
-      //DUMP << "Parsed attr " << attr.name.getText() << "=" << attr.value.getText()  << ENDL;
       
       return true;
     } 
@@ -399,7 +390,7 @@ private:
   // Parse "<TAG>", ignores leading whitespace
   // https://www.w3.org/TR/REC-xml/#sec-starttags
   // No space allowed between < and tag name
-  constexpr array<attr, 32> parse_open_tag()
+  constexpr vec<attr, 32> parse_open_tag()
   {
     DUMP << "Parsing open tag ..." << ENDL;
     DUMP << "Node size = " << nodes.size() << ENDL;
@@ -414,13 +405,12 @@ private:
       PARSE_ERR("Missing <");
     }
     
-    // Bump the free node index
-    cnode &node = new_node();
-    
     // Try to parse an [a-z]+ as a tag
-    char_view &sym = node.tag = eat_alpha(is_alpha);
-    
-    //DUMP << sym.getText() << ENDL;
+    char_view sym = eat_alpha(is_alpha);
+
+    // add a node 
+    nodes.push_back(cnode(sym));
+    cnode &node = nodes.back();
     
     // Eat any trailing whitespace
     eat_space();
@@ -433,12 +423,12 @@ private:
     }
     
     // Parse attributes
-    array<attr, 32> attrs, styles;
+    vec<attr, 32> attrs, styles;
     while(parse_attrs(attrs));
     
     // Check if void tag
     const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
-    const int idx = find_arr(arrVoidTags, nVoidTags, sym.m_pBeg);
+    const int idx = find_arr(arrVoidTags, nVoidTags, node.tag.m_pBeg);
     
     if(idx != -1)
     {
@@ -446,7 +436,7 @@ private:
       eat_space();
       
       // Bump up the symbol end, so the parser can check for a trailing / and not look for a close tag
-      sym.m_pEnd = pszText + 1;
+      node.tag.m_pEnd = pszText + 1;
       
       if(!eat_str("/")) 
       {
@@ -486,7 +476,7 @@ private:
       PARSE_ERR("Mismatched Close Tag");
     }
     
-    //DUMP << "Close " << sym.getText() << ENDL;
+    DUMP << "Close " << sym << ENDL;
     
     // Ignore space, parse >
     eat_space();
@@ -500,7 +490,7 @@ private:
   }
 
   // Parses all text content until a "<" is hit 
-  constexpr void parse_tag_content(int iParentIDX)
+  constexpr void parse_tag_content(int iParentIDX, bool bTrim)
   {
     // make sure we have something
     check_eos();
@@ -510,6 +500,11 @@ private:
     contentUnexpectedChars[int('>')] = true;
     contentUnexpectedChars[int('&')] = true;
     nodes[iParentIDX].text = eat_until('<', contentUnexpectedChars);
+
+    if(bTrim)
+    {
+      nodes[iParentIDX].text.trim();
+    }
     
     // Make sure we have something left
     check_eos();
@@ -676,7 +671,7 @@ struct tree
     {
       // Check if first child is "@ATTR"
       const auto &child = parser.nodes[cNode.child];
-      if(child.getTag() == "@ATTR")
+      if(child.tag == g_symAttr)
       {
         // Put the chain of attribute nodes into ther attrs array
         auto attr = parser.nodes[child.child];
@@ -716,3 +711,4 @@ constexpr spt::parser operator"" _html(const char *pszText, size_t)
   parser.parse_html(-1);
   return parser;
 }
+
