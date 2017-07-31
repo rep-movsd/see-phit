@@ -1,0 +1,2 @@
+ParseError(((const char*)"Expecting a tag name after <")).ErrLine::operator[](((size_t)iLine))'
+array subscript value '4' is outside the bounds of array type 'int [0]'

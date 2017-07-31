@@ -1,1 +1,4 @@
 *.err
+a.out
+misc/*
+*.kdev4

@@ -23,31 +23,22 @@ struct DummyOutStream
 
 constexpr DummyOutStream DummyOut;
 
-template<int SIZE>
 struct ErrLine
 {
-  char dummy[SIZE];
-  constexpr char &operator[](size_t i) { return dummy[i];};
+  int dummy[0];
+  constexpr int &operator[](size_t i) { return dummy[i];};
 };
 
 // Dummy function to prettify compile-time errors
-constexpr ErrLine<0> ParseError(const char*)
+constexpr ErrLine ParseError(const char*)
 {
-  return ErrLine<0>{};
+  return ErrLine{};
 }
 
-// Dummy function to prettify compile-time errors
-constexpr ErrLine<1> ParseWarning(const char*)
-{
-  return ErrLine<1>{};
-}
 
 #define PARSE_ERR(x) \
 int iLine = cur_line(); \
 ParseError(x)[iLine] 
-
-#define PARSE_WARN(x) \
-ParseWarning(x)[0] = 256;
 
 
 #endif
