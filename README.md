@@ -16,15 +16,17 @@ Example:
 #include "seephit.h"
 using namespace std;
 
+
+
 int main()
 {
   constexpr auto parser =
-  R"*(
+    R"*(
     <span >
     <p  color="red" height='10' >{{name}} is a {{profession}} in {{city}}</p  >
     </span>
     )*"_html;
-
+    
   spt::tree spt_tree(parser);
   
   spt::template_dict dct;
@@ -32,16 +34,16 @@ int main()
   dct["profession"] = "doctor";
   dct["city"] = "London";
   
-  spt_tree.root.dump(cerr, dct);
+  spt_tree.root.render(cerr, dct);
   cerr << endl;
   
   dct["city"] = "New York";
   dct["name"] = "John";
   dct["profession"] = "janitor";
 
-  spt_tree.root.dump(cerr, dct);
+  spt_tree.root.render(cerr, dct);
   cerr << endl;
-} 
+}
 ```
 
 produces the following output
