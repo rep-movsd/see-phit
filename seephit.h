@@ -296,7 +296,7 @@ private:
       int cmp = name.cmpCaseLess(g_symID); 
       if(cmp == 0)
       {
-        if(!ids.addSym(name))
+        if(!ids.addSym(value))
         {
           PARSE_ERR("Duplicate ID on tag");
         }
@@ -361,15 +361,10 @@ private:
     
     if(bIsVoidTag)
     {
-      // Void tag, add the "/" too
+      // Void tag, optionally eat the "/" too
       eat_space();
+      eat_str("/");
       
-      // Bump up the symbol end, so the parser can check for a trailing / and not look for a close tag
-      node.tag.m_pEnd = pszText + 1;
-      
-      if(!eat_str("/")) 
-      {
-        PARSE_ERR("Missing / on a void tag");
       }
     }
 
@@ -564,13 +559,16 @@ class rnode
   // If content has template tags of the form {{key}}, store them in this
   template_text templates;
   
+  // Whether its a void node
+  bool bVoid;
+  
   int index;
   
 public:
-  rnode(): index(-1){}
+  rnode(): bVoid(), index(NULL_NODE) {}
 
-  rnode(const char_view &tag, const char_view &text, int index, template_dict &dctTemplates) 
-    : tag(tag), text(text), index(index) 
+  rnode(const char_view &tag, const char_view &text, bool bVoid, int index, template_dict &dctTemplates) 
+    : tag(tag), text(text), bVoid(bVoid), index(index) 
   {
     // Iterate through the text and detect if we have a template strings
     const char *szOpen = "{{";
@@ -622,7 +620,7 @@ public:
   }
   
   
-  void dump(ostream &ostr, const template_dict &dctTemplates, int indent = 0) const
+  void render(ostream &ostr, const template_dict &dctTemplates, int indent = 0) const
   {
     string sIndent = string(indent * 2, ' ');
     bool bTextNode = tag == g_symText;
@@ -650,12 +648,12 @@ public:
       
       for(const auto& child: children)
       {
-        child.dump(ostr, dctTemplates, indent + 1);
+        child.render(ostr, dctTemplates, indent + 1);
       }
     }
     
     // Skip text and close tag for void tags
-    if(tag.back() != '/')
+    if(!bVoid)
     {
       if(templates.parts().size())
       {
@@ -689,7 +687,7 @@ struct tree
   
   // Takes the compile time parser data and constructs thr runtime node tree 
   // Also generates a map for templates 
-  tree(const parser &parser): root("HTML", "", -1, templates)
+  tree(const parser &parser): root("HTML", "", false, -1, templates)
   {
     build(parser, root, templates, 0);
   }
@@ -702,7 +700,7 @@ struct tree
     const cnode &cNode = parser.nodes[index];
     
     // Create a SPTNode and set ID if any
-    rnode rNode(cNode.tag, cNode.text, index, dctTemplates);
+    rnode rNode(cNode.tag, cNode.text, cNode.child == VOID_TAG, index, dctTemplates);
     if(cNode.id.size())
     {
       rNode.id = cNode.id;
@@ -712,7 +710,7 @@ struct tree
     parent.children.emplace_back(rNode);
     
     // If there are children for this node
-    if(cNode.child > -1)
+    if(cNode.child > NULL_NODE)
     {
       // Check if first child is "@ATTR"
       const auto &child = parser.nodes[cNode.child];
@@ -723,12 +721,12 @@ struct tree
         while(1)
         {
           parent.children.back().attrs[attr.getTag()] = attr.getText();
-          if(attr.sibling == -1) break;
+          if(attr.sibling == NULL_NODE) break;
           attr = parser.nodes[attr.sibling];
         }
         
         // If there were more nodes after @ATTR, recursively process them
-        if(child.sibling > -1)
+        if(child.sibling > NULL_NODE)
         {
           build(parser, parent.children.back(), dctTemplates, child.sibling);
         }
@@ -741,7 +739,7 @@ struct tree
     }
     
     // Process siblings
-    if(cNode.sibling > -1)
+    if(cNode.sibling > NULL_NODE)
     {
       build(parser, parent, dctTemplates, cNode.sibling);
     }
@@ -753,7 +751,7 @@ struct tree
 constexpr spt::parser operator"" _html(const char *pszText, size_t)
 {
   spt::parser parser(pszText);
-  parser.parse_html(-1);
+  parser.parse_html(spt::NULL_NODE);
   return parser;
 }
 

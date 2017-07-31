@@ -3,6 +3,38 @@
 namespace spt
 {
   
+const int NULL_NODE = -1;
+const int VOID_TAG = -2;
+
+enum ParseErrors 
+{
+  None = 0,
+  Ignored = 0,
+  
+  Unexpected_end_of_stream = 256,
+  
+  Expecting_open_angle_bracket,
+  Expecting_close_angle_bracket,
+  
+  Expecting_a_tag_name,
+  Expecting_identifier,
+  
+  Expecting_a_close_tag,
+  Mismatched_close_tag,
+  
+  Expecting_equals_after_attribute_name,
+  Expecting_open_quote_for_attribute_value,
+  Unexpected_character_inside_content,
+  
+  Duplicate_tag_id,
+  
+  // Warnings
+  Empty_attribute_value, 
+  Unknown_tag_name
+};
+
+
+ 
 // Map of template names to values
 typedef map<string, string> template_dict;
 
@@ -330,11 +362,11 @@ struct cnode
    * </HTML>
    * 
    * 
-   * HTML-> -1
+   * HTML-> NULL_NODE
    * |
-   * DIV -> DIV ->  DIV -> -1
-   * |      |       |
-   * NULL   P->-1   -1
+   * DIV -> DIV --------->  DIV -> -1
+   * |      |                  |
+   * NULL   P->NULL_NODE    NULL_NODE
    * 
    * Since this is meant to be a compile time DS, pointers sibling and child are just ints
    * They index into an array of fixed size
@@ -342,17 +374,19 @@ struct cnode
    * Attributes are nested as children under <_ATTR>
    * Styles are nested under <_ATTR><_STYLE></_STYLE></_ATTR>
    * 
+   * child == VOID_TAG is a special case
+   * 
    */
   
-  constexpr cnode(): sibling(-1), child(-1), tag(), text(), id() {}
+  constexpr cnode(): sibling(NULL_NODE), child(NULL_NODE), tag(), text(), id() {}
   constexpr cnode(const cnode &n):
     sibling(n.sibling), child(n.child), tag(n.tag), text(n.text), id(n.id) {}
     
   constexpr cnode(const char_view &tag):
-    sibling(-1), child(-1), tag(tag), text(), id() {}
+    sibling(NULL_NODE), child(NULL_NODE), tag(tag), text(), id() {}
 
   constexpr cnode(const char_view &tag, const char_view &text):
-    sibling(-1), child(-1), tag(tag), text(text), id() {}
+    sibling(NULL_NODE), child(NULL_NODE), tag(tag), text(text), id() {}
     
     
   void dump() const
@@ -391,5 +425,6 @@ struct cnode
   char_view text;
   char_view id;
 };
+
 
 }

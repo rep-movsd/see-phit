@@ -44,6 +44,7 @@ constexpr const char *arrTags[] =
   "canvas",
   "caption",
   "center",
+  "circle",  // SVG
   "cite",
   "code",
   "col",
@@ -142,6 +143,7 @@ constexpr const char *arrTags[] =
   "sub",
   "summary",
   "sup",
+  "svg",
   "table",
   "tbody",
   "td",
