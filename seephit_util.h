@@ -6,34 +6,6 @@ namespace spt
 const int NULL_NODE = -1;
 const int VOID_TAG = -2;
 
-enum ParseErrors 
-{
-  None = 0,
-  Ignored = 0,
-  
-  Unexpected_end_of_stream = 256,
-  
-  Expecting_open_angle_bracket,
-  Expecting_close_angle_bracket,
-  
-  Expecting_a_tag_name,
-  Expecting_identifier,
-  
-  Expecting_a_close_tag,
-  Mismatched_close_tag,
-  
-  Expecting_equals_after_attribute_name,
-  Expecting_open_quote_for_attribute_value,
-  Unexpected_character_inside_content,
-  
-  Duplicate_tag_id,
-  
-  // Warnings
-  Empty_attribute_value, 
-  Unknown_tag_name
-};
-
-
  
 // Map of template names to values
 typedef map<string, string> template_dict;
