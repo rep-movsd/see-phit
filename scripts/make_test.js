@@ -11,7 +11,8 @@ int main()
     #include "${file}" 
   
   spt::tree spt_tree(parser);
-  spt_tree.root.dump(cerr);
+  spt::template_dict dct;
+  spt_tree.root.dump(cout, dct);
 }
 `;
 

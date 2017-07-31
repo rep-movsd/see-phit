@@ -50,6 +50,11 @@ constexpr bool is_attrval(char ch)
   return is_alpha(ch) || is_digit(ch); 
 }
 
+constexpr bool is_alnum(char ch)
+{
+  return is_alpha(ch) || (ch >= '0' && ch <= '9'); 
+}
+
 // Compare s1 and s2
 // assumes s2 has a NUL terminator, but s1 may not
 constexpr int comparei(const char *s1, const char *s2)
