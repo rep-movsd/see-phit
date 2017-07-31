@@ -20,8 +20,9 @@ using std::cerr;
 using std::endl;
 
 #include "tags.hpp"
-#include "seephit_debug.h"
-#include "seephit_util.h"
+#include "debug.h"
+#include "util.h"
+
 
 // maximum nodes and attributes in the tree
 #define SPT_MAX_NODES 32768
@@ -41,7 +42,6 @@ constexpr const char_view g_symPre{"pre"};
 // These two tags are used internally to handle bare text and attributes
 constexpr const char_view g_symText{"@text"};
 constexpr const char_view g_symAttr{"@attr"};
-
 
 
 // Compile time parser
@@ -285,8 +285,9 @@ private:
         char_view value = eat_until(close, nullptr);
         if(value.empty())
         {
-          PARSE_WARN("Empty value for attribute");
+          PARSE_ERR("Empty value for non boolean attribute");
         }
+
         // Eat the close delim
         pszText++;
         
@@ -360,7 +361,7 @@ private:
     const int nTags = sizeof(arrTags)/sizeof(arrTags[0]);
     if(find_arr(arrTags, nTags, sym.m_pBeg) == -1)
     {
-      PARSE_WARN("Unknown tag name");
+      PARSE_ERR("Unknown tag name");
     }
     
     // Parse attributes

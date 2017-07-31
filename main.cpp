@@ -19,15 +19,17 @@ int main()
   dct["profession"] = "doctor";
   dct["city"] = "London";
   
-  spt_tree.root.dump(cerr, dct);
+  spt_tree.root.render(cerr, dct);
   cerr << endl;
   
   dct["city"] = "New York";
   dct["name"] = "John";
   dct["profession"] = "janitor";
 
-  spt_tree.root.dump(cerr, dct);
+  spt_tree.root.render(cerr, dct);
   cerr << endl;
   
   
+  
+  cerr << "Total nodes: " << parser.nodes.size() << endl;
 }
