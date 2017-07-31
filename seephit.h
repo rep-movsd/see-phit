@@ -42,6 +42,8 @@ constexpr const char_view g_symPre{"pre"};
 constexpr const char_view g_symText{"@text"};
 constexpr const char_view g_symAttr{"@attr"};
 
+
+
 // Compile time parser
 struct parser
 {
@@ -254,59 +256,70 @@ private:
     { 
       // Get the attr name
       const char_view &name = eat_alpha(is_attr); 
+
+      bool bHasEqual = eat_str("=");
       
-      if(!eat_str("="))
+      if(bHasEqual)
       {
-        PARSE_ERR("Expecting '=' after attribute name");
-      }
-      
-      // Check what delimiter is used "  ' or {
-      char close = 0;
-      switch(pszText[0])
-      {
-        case '"': 
-        case '\'': 
-          close = pszText[0];  
-          pszText++;
-          break;
-          
-        case '{':  
-          close = '}'; 
-          pszText++;
-          break;
-          
-        default:
-          PARSE_ERR("Expecting open quote or '{' for attribute value");
-      }
-      
-      check_eos();
-      
-      char_view value = eat_until(close, nullptr);
-      if(value.empty())
-      {
-        PARSE_ERR("Empty value for attribute");
-      }
-      // Eat the close delim
-      pszText++;
-      
-      // Swallow any space
-      eat_space();
-      
-      // Is it an ID tag
-      int cmp = name.cmpCaseLess(g_symID); 
-      if(cmp == 0)
-      {
-        if(!ids.addSym(value))
+        // Check what delimiter is used "  ' or {
+        char close = 0;
+        switch(pszText[0])
         {
-          PARSE_ERR("Duplicate ID on tag");
+          case '"': 
+          case '\'': 
+            close = pszText[0];  
+            pszText++;
+            break;
+            
+          case '{':  
+            close = '}'; 
+            pszText++;
+            break;
+            
+          default:
+            PARSE_ERR("Expecting open quote or '{' for attribute value");
         }
         
-        nodes.back().id = value;
+        check_eos();
+        
+        char_view value = eat_until(close, nullptr);
+        if(value.empty())
+        {
+          PARSE_WARN("Empty value for attribute");
+        }
+        // Eat the close delim
+        pszText++;
+        
+        // Swallow any space
+        eat_space();
+        
+        // Is it an ID tag
+        int cmp = name.cmpCaseLess(g_symID); 
+        if(cmp == 0)
+        {
+          if(!ids.addSym(value))
+          {
+            PARSE_ERR("Duplicate ID on tag");
+          }
+          
+          nodes.back().id = value;
+        }
+        else
+        {
+          attrs.push_back(attr(name, value));
+          //DUMP << "Parsed attr " << name << "=" << value << ENDL;
+        }
+        
       }
       else
       {
-        attrs.push_back(attr(name, value));
-        //DUMP << "Parsed attr " << name << "=" << value << ENDL;
+        const int nAttrs = sizeof(arrBoolAttrs)/sizeof(arrBoolAttrs[0]);
+        if(find_arr(arrBoolAttrs, nAttrs, name.m_pBeg) == -1)
+        {
+          PARSE_ERR("Expecting a value for attribute");
+        }
+        
+        attrs.push_back(attr(name, name));
       }
       
       return true;
@@ -347,7 +360,7 @@ private:
     const int nTags = sizeof(arrTags)/sizeof(arrTags[0]);
     if(find_arr(arrTags, nTags, sym.m_pBeg) == -1)
     {
-      PARSE_ERR("Unknown tag name");
+      PARSE_WARN("Unknown tag name");
     }
     
     // Parse attributes
@@ -364,8 +377,6 @@ private:
       // Void tag, optionally eat the "/" too
       eat_space();
       eat_str("/");
-      
-      }
     }
 
     // Grab the final >
@@ -631,7 +642,7 @@ public:
       
       if(id.size())
       {
-        ostr << " ID" << "=[" << id << ']';
+        ostr << " ID" << "='" << id << '\'';
       }
       
       for(const auto &attr: attrs)

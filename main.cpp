@@ -2,10 +2,12 @@
 #include "seephit.h"
 using namespace std;
 
+
+
 int main()
 {
   constexpr spt::parser parser =
-    #include "test/valid2.spt"
+    #include "test/large.spt"
   
   //parser.dump();
   

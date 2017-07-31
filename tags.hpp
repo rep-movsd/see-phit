@@ -18,6 +18,21 @@ constexpr const char* arrVoidTags[] =
   "source"
 };
 
+constexpr const char *arrBoolAttrs[] = 
+{
+  "checked",
+  "compact"
+  "declare",
+  "defer",
+  "disabled",
+  "ismap",
+  "multiple",
+  "noresize",
+  "noshade",
+  "nowrap",
+  "readonly",
+  "selected",
+};
 
 constexpr const char *arrTags[] = 
 {
