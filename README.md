@@ -113,9 +113,13 @@ And the following in clang:
 The error "Mismatched Close Tag" is reported along with the '3' which represents the line number in which the error occured.
 If your IDE does background parsing, it will indicate that your HTML template is malformed as you type it.
 
+### Limitations
+For some reason after I rewrote the parser, gcc 7.11 with O3 seems to take forever to compile. clang seems to take the same time for any optimization level.
+Perhaps it's a compiler bug.
+
+There seems to be no way to output any sort of diagnostic as a warning when the compile time exection happens. So we cannot support warnings, only fatal errors.
+
 ### Future plans
 Add more complicated templating functionality with loops, conditionals and perhaps lambdas, and also allow this to be used on the frontend JS with emscripten.
 
 Optimize the hell out of the templating engine
-
-
