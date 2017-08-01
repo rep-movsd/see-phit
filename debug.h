@@ -38,7 +38,7 @@ constexpr ErrLine ParseError(const char*)
 
 #define PARSE_ERR(x) \
 int iLine = cur_line(); \
-ParseError(x)[iLine] 
+ParseError(x)[iLine] = 0
 
 
 #endif

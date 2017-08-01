@@ -1,19 +1,16 @@
 #pragma once
 #include <cassert>
-#include <cstdint>
 #include <string>
-#include <algorithm>
 #include <vector>
 #include <map>
 #include <utility>
+#include <algorithm>
 #include <iostream>
 
 using std::string;
 using std::vector;
 using std::pair;
 using std::map;
-
-using std::find;
 
 using std::ostream;
 using std::cerr;
@@ -25,14 +22,16 @@ using std::endl;
 
 
 // maximum nodes and attributes in the tree
-#define SPT_MAX_NODES 32768
-#define SPT_MAX_ATTRS 8192
+#define SPT_MAX_NODES 1024
+#define SPT_MAX_ATTRS 1024
 
 namespace spt
 {
 
 typedef vec<attr, SPT_MAX_ATTRS> attrs;
 typedef vec<cnode, SPT_MAX_NODES> cnodes;
+typedef vec<attr, 16> node_attrs;
+
 
 // Hardcoded symbols to detect id and style
 constexpr const char_view g_symID{"id"};
@@ -84,6 +83,7 @@ private:
   // Return line number of current poistion
   constexpr int cur_line() const
   {
+    // Count the number of \n
     int n = 0;
     auto p = pszStart;
     while(p != pszText)
@@ -104,9 +104,10 @@ private:
   }
   
   // Advances to first non-whitespace character
+  // For simplicity assume anything below ascii 33 is white space
   constexpr void eat_space()
   {
-    while(is_space(*pszText)) ++pszText;
+    while(*pszText <= 32 && *pszText) ++pszText;
   }
   
   // Consumes [a-z]+
@@ -115,9 +116,7 @@ private:
     // Ensure not EOS
     check_eos();
     
-    char_view sym;
-    sym.m_pBeg = pszText;
-    sym.m_pEnd = pszText;
+    char_view sym(pszText, pszText);
     while(isX(*sym.m_pEnd)) sym.m_pEnd++;
     
     // Ensure at least 1 character is consumed
@@ -155,32 +154,10 @@ private:
     return true;
   }
   
-  // Tries to consume the characters in [sym.pBeg, sym.pEnd)
-  constexpr bool eat_symbol(const char_view &sym)
-  {
-    auto p = sym.m_pBeg;
-    while(p != sym.m_pEnd)
-    {
-      if(to_upper(*p) != to_upper(*pszText)) return false;    
-      ++p;
-      ++pszText;
-      
-      // Ensure we are not at end of stream before the symbol has been compared fully
-      if(p != sym.m_pEnd)
-      {
-        check_eos();
-      }
-    }
-    
-    return true;
-  }
-  
   // Consume stuff until ch is encountered
   constexpr const char_view eat_until(char ch, const bool *unExpected)
   {
-    char_view sym;
-    sym.m_pBeg = pszText;
-    sym.m_pEnd = pszText;
+    char_view sym(pszText, pszText);
     while(*sym.m_pEnd && *sym.m_pEnd != ch) 
     {
       if(unExpected && unExpected[(unsigned char)(*sym.m_pEnd)])
@@ -199,22 +176,16 @@ private:
   {
     auto saved = pszText;
     eat_space();
-    if(*pszText && *pszText++ == '<')
+    if(pszText[0] == '<')
     {
-      if(*pszText)
+      if(is_alpha(pszText[1])) 
       {
-        if(is_alpha(*pszText)) 
-        {
-          pszText = saved;
-          return true;
-        }
-        
-        if(*pszText == '/') 
-        {
-          pszText = saved;
-          return false;
-        }
-        
+        pszText = saved;
+        return true;
+      }
+      
+      if(pszText[1] != '/') 
+      {
         PARSE_ERR("Expecting a tag name after <");
       }
     }
@@ -230,13 +201,9 @@ private:
     auto saved = pszText;
     eat_space();
     
-    auto p = pszText;
-    if(*p && *p++ == '<')
+    if(pszText[0] == '<' && pszText[1] == '/')
     {
-      if(*p && *p++ == '/')
-      {
-        return is_alpha(*p);
-      }
+      return is_alpha(pszText[2]);
     }
     
     // restore saved pointer
@@ -246,7 +213,7 @@ private:
   
   // Parses one attribute like NAME=VALUE
   // NAME is a sequence of [a-z\-] and VALUE is "text", 'text' or {text}
-  constexpr bool parse_attrs(vec<attr, 32> &attrs)
+  constexpr bool parse_attrs(node_attrs &attrs)
   {
     // Swallow any space
     eat_space();
@@ -261,28 +228,17 @@ private:
       
       if(bHasEqual)
       {
-        // Check what delimiter is used "  ' or {
-        char close = 0;
-        switch(pszText[0])
+        // Check what delimiter is used " or ' 
+        char chDelim = pszText[0];
+        if( chDelim != '"' && chDelim != '\'')
         {
-          case '"': 
-          case '\'': 
-            close = pszText[0];  
-            pszText++;
-            break;
-            
-          case '{':  
-            close = '}'; 
-            pszText++;
-            break;
-            
-          default:
-            PARSE_ERR("Expecting open quote or '{' for attribute value");
+          PARSE_ERR("Expecting open quote for attribute value");
         }
-        
+        ++pszText;
+
         check_eos();
         
-        char_view value = eat_until(close, nullptr);
+        char_view value = eat_until(chDelim, nullptr);
         if(value.empty())
         {
           PARSE_ERR("Empty value for non boolean attribute");
@@ -295,8 +251,7 @@ private:
         eat_space();
         
         // Is it an ID tag
-        int cmp = name.cmpCaseLess(g_symID); 
-        if(cmp == 0)
+        if(name == g_symID)
         {
           if(!ids.addSym(value))
           {
@@ -332,7 +287,7 @@ private:
   // Parse "<TAG>", ignores leading whitespace
   // https://www.w3.org/TR/REC-xml/#sec-starttags
   // No space allowed between < and tag name
-  constexpr bool parse_open_tag(vec<attr, 32> &attrs)
+  constexpr bool parse_open_tag(node_attrs &attrs)
   {
     // Left trim whitespace
     eat_space();
@@ -369,9 +324,7 @@ private:
     
     // Check if void tag
     const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
-    const int idx = find_arr(arrVoidTags, nVoidTags, node.tag.m_pBeg);
-    
-    bool bIsVoidTag = idx != -1;
+    bool bIsVoidTag = find_arr(arrVoidTags, nVoidTags, node.tag.m_pBeg) != -1;
     
     if(bIsVoidTag)
     {
@@ -415,8 +368,6 @@ private:
       PARSE_ERR("Mismatched Close Tag");
     }
     
-    //DUMP << "Close " << sym << ENDL;
-    
     // Ignore space, parse >
     eat_space();
     if(!eat_str(">")) 
@@ -429,7 +380,7 @@ private:
   }
 
   // Creates a node "@attr" under the given node and chains attributes under it if any
-  constexpr void append_attrs(cnode &node, vec<attr, 32> &attrs)
+  constexpr void append_attrs(cnode &node, node_attrs &attrs)
   {
     // If there are any attributes, they become the first children of this node
     if(attrs.size())
@@ -459,7 +410,7 @@ private:
     // Parse the open tag, get its index
     int iCurrId = nodes.size();
     
-    vec<attr, 32> attrs;
+    node_attrs attrs;
     bool bIsVoidTag = parse_open_tag(attrs);
     cnode &node = nodes[iCurrId];
     append_attrs(node, attrs);
@@ -471,6 +422,10 @@ private:
       
       // Finally parse the close tag
       parse_close_tag(node.tag);
+    }
+    else
+    {
+      node.child = VOID_TAG;
     }
     
     return iCurrId;

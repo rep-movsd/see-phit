@@ -1,6 +1,6 @@
 R"*(
 <span >
-  <p  color="red" height='1' weight={test} > 
+  <p  color="red" height='1' weight="test" > 
     Extra whitespace after close and open tags
   </p  >
   
