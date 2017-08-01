@@ -16,15 +16,17 @@ Example:
 #include "seephit.h"
 using namespace std;
 
+
+
 int main()
 {
   constexpr auto parser =
-  R"*(
+    R"*(
     <span >
     <p  color="red" height='10' >{{name}} is a {{profession}} in {{city}}</p  >
     </span>
     )*"_html;
-
+    
   spt::tree spt_tree(parser);
   
   spt::template_dict dct;
@@ -32,16 +34,16 @@ int main()
   dct["profession"] = "doctor";
   dct["city"] = "London";
   
-  spt_tree.root.dump(cerr, dct);
+  spt_tree.root.render(cerr, dct);
   cerr << endl;
   
   dct["city"] = "New York";
   dct["name"] = "John";
   dct["profession"] = "janitor";
 
-  spt_tree.root.dump(cerr, dct);
+  spt_tree.root.render(cerr, dct);
   cerr << endl;
-} 
+}
 ```
 
 produces the following output
@@ -111,9 +113,13 @@ And the following in clang:
 The error "Mismatched Close Tag" is reported along with the '3' which represents the line number in which the error occured.
 If your IDE does background parsing, it will indicate that your HTML template is malformed as you type it.
 
+### Limitations
+For some reason after I rewrote the parser, gcc 7.11 with O3 seems to take forever to compile. clang seems to take the same time for any optimization level.
+Perhaps it's a compiler bug.
+
+There seems to be no way to output any sort of diagnostic as a warning when the compile time exection happens. So we cannot support warnings, only fatal errors.
+
 ### Future plans
 Add more complicated templating functionality with loops, conditionals and perhaps lambdas, and also allow this to be used on the frontend JS with emscripten.
 
 Optimize the hell out of the templating engine
-
-
