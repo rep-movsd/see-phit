@@ -8,8 +8,9 @@
 #define ENDL "\n"
 
 // Dummy function to prettify compile-time errors
-void ParseError(const char* err) {cerr << "Parse Error:" << err << endl;}
-#define PARSE_ERR(x) ParseError(x)
+#define PARSE_ERR(x) {cerr << "Parse Error:" << #x << endl;}
+#define PARSE_WARN(x) {cerr << "Parse Warning:" << #x << endl;}
+
 
 #else
 
@@ -35,10 +36,9 @@ constexpr ErrLine ParseError(const char*)
   return ErrLine{};
 }
 
+#define PARSE_ERR(x) errRow = cur_row(); errCol = cur_col(); err = x
+#define PARSE_WARN(x) warns.push_back(Message(x, cur_row(), cur_col()))
 
-#define PARSE_ERR(x) \
-int iLine = cur_line(); \
-ParseError(x)[iLine] = 0
 
 
 #endif

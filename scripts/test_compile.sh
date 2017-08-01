@@ -18,8 +18,10 @@ done
 for i in *.spt; 
 do
   printf "${NC}$i\n"
-  g++ -I.. -S --std=c++14 $i.cpp &> /tmp/$i.err
-  if (egrep -o "((array.*)|(ParseError.*))" /tmp/$i.err > /tmp/$i.perr); then
+  time g++ -I.. -S --std=c++14 $i.cpp &> /tmp/$i.err
+  printf "\n"
+  
+  if (egrep -o "((Warning\(\) \[.*)|(Error\(\) \[.*))" /tmp/$i.err > /tmp/$i.perr); then
     mv /tmp/$i.perr ./$i.err
   else
     mv /tmp/$i.err ./$i.err

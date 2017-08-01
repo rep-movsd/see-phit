@@ -1,2 +1,1 @@
-ParseError(((const char*)"Expecting a tag name after <")).ErrLine::operator[](((size_t)iLine))'
-array subscript value '1' is outside the bounds of array type 'int [0]'
+Error() [with int ROW = 2; int COL = 2; WHAT = spt::Expecting_a_tag_name_after_open_bracket]':

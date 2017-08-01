@@ -1,2 +1,1 @@
-ParseError(((const char*)"Missing > on void tag")).ErrLine::operator[](((size_t)iLine))'
-array subscript value '3' is outside the bounds of array type 'int [0]'
+Error() [with int ROW = 4; int COL = 8; WHAT = spt::Missing_close_bracket_on_void_tag]':

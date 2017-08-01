@@ -17,20 +17,25 @@ using std::cerr;
 using std::endl;
 
 #include "tags.hpp"
-#include "debug.h"
 #include "util.h"
-
+#include "parse_error.h"
+#include "debug.h"
 
 // maximum nodes and attributes in the tree
 #define SPT_MAX_NODES 1024
 #define SPT_MAX_ATTRS 1024
+#define SPT_MAX_WARNINGS 20
+#define SPT_MAX_ATTR_PER_NODE 16
 
 namespace spt
 {
 
+ 
 typedef vec<attr, SPT_MAX_ATTRS> attrs;
 typedef vec<cnode, SPT_MAX_NODES> cnodes;
-typedef vec<attr, 16> node_attrs;
+typedef vec<attr, SPT_MAX_ATTR_PER_NODE> node_attrs;
+typedef vec<Message, SPT_MAX_WARNINGS> warnings;
+
 
 
 // Hardcoded symbols to detect id and style
@@ -43,14 +48,20 @@ constexpr const char_view g_symText{"@text"};
 constexpr const char_view g_symAttr{"@attr"};
 
 
+
 // Compile time parser
 struct parser
 {
   cnodes nodes;
   sym_tab ids;
+  warnings warns;
+  Messages err {};
+  
+  int errRow = -1;
+  int errCol = -1;
+  
   
   constexpr parser(const char *pszText): pszText(pszText), pszStart(pszText) {}
-  constexpr parser(): pszText(), pszStart() {}
 
   // Parse grammar
   // HTML     :: CONTENT | CONTENT HTML
@@ -64,7 +75,7 @@ struct parser
   {
     while(parse_content(iParentId));
   }
-  
+      
   void dump() const 
   {
     int i = 0;
@@ -75,13 +86,15 @@ struct parser
       cerr << endl;
     }
   }
+  
+  
  
 private:
-  const char *pszText;  // Position in the stream
-  const char *pszStart;
+  const char *pszText = nullptr;  // Position in the stream
+  const char *pszStart = nullptr;
   
   // Return line number of current poistion
-  constexpr int cur_line() const
+  constexpr int cur_row() const
   {
     // Count the number of \n
     int n = 0;
@@ -89,6 +102,19 @@ private:
     while(p != pszText)
     {
       if(*p++ == '\n') ++n;
+    }
+    return n + 1;
+  }
+  
+  // Return column number of current poistion
+  constexpr int cur_col() const
+  {
+    // Count the number of chars to reach \n or beginning
+    int n = 0;
+    auto p = pszText;
+    while(p != pszStart && *p-- != '\n')
+    {
+      ++n;
     }
     return n;
   }
@@ -99,7 +125,7 @@ private:
     bool eos = !*pszText;
     if(eos) 
     {
-      PARSE_ERR("Unexpected end of stream");
+    //  PARSE_ERR(Error_Unexpected_end_of_stream);
     }
   }
   
@@ -122,7 +148,7 @@ private:
     // Ensure at least 1 character is consumed
     if(sym.empty()) 
     {
-      PARSE_ERR("Expecting an identifier");
+      PARSE_ERR(Error_Expecting_an_identifier);
     }
     
     pszText = sym.m_pEnd;
@@ -162,7 +188,11 @@ private:
     {
       if(unExpected && unExpected[(unsigned char)(*sym.m_pEnd)])
       {
-        PARSE_ERR("Unexpected character inside tag content");
+        auto save = pszText;
+        pszText = sym.m_pEnd;
+        PARSE_ERR(Error_Unexpected_character_inside_tag_content);
+        pszText = save;
+        break;
       }
       sym.m_pEnd++;
     }
@@ -186,7 +216,8 @@ private:
       
       if(pszText[1] != '/') 
       {
-        PARSE_ERR("Expecting a tag name after <");
+        pszText++;
+        PARSE_ERR(Error_Expecting_a_tag_name_after_open_bracket);
       }
     }
     
@@ -215,6 +246,8 @@ private:
   // NAME is a sequence of [a-z\-] and VALUE is "text", 'text' or {text}
   constexpr bool parse_attrs(node_attrs &attrs)
   {
+    if( errRow > -1) return false;
+    
     // Swallow any space
     eat_space();
     check_eos();
@@ -232,7 +265,7 @@ private:
         char chDelim = pszText[0];
         if( chDelim != '"' && chDelim != '\'')
         {
-          PARSE_ERR("Expecting open quote for attribute value");
+          PARSE_ERR(Error_Expecting_open_quote_for_attribute_value);
         }
         ++pszText;
 
@@ -241,7 +274,7 @@ private:
         char_view value = eat_until(chDelim, nullptr);
         if(value.empty())
         {
-          PARSE_ERR("Empty value for non boolean attribute");
+          PARSE_ERR(Error_Empty_value_for_non_boolean_attribute);
         }
 
         // Eat the close delim
@@ -255,7 +288,11 @@ private:
         {
           if(!ids.addSym(value))
           {
-            PARSE_ERR("Duplicate ID on tag");
+            // Save the pointer, point it to the start of symbol, for the warning
+            auto save = pszText ;
+            pszText = value.begin();
+            PARSE_WARN(Error_Duplicate_ID_on_tag);
+            pszText = save;
           }
           
           nodes.back().id = value;
@@ -272,7 +309,7 @@ private:
         const int nAttrs = sizeof(arrBoolAttrs)/sizeof(arrBoolAttrs[0]);
         if(find_arr(arrBoolAttrs, nAttrs, name.m_pBeg) == -1)
         {
-          PARSE_ERR("Expecting a value for attribute");
+          PARSE_ERR(Error_Expecting_a_value_for_attribute);
         }
         
         attrs.push_back(attr(name, name));
@@ -289,6 +326,8 @@ private:
   // No space allowed between < and tag name
   constexpr bool parse_open_tag(node_attrs &attrs)
   {
+    if( errRow > -1) return false;
+    
     // Left trim whitespace
     eat_space();
     check_eos();
@@ -296,7 +335,7 @@ private:
     // Try to parse the "<"
     if(!eat_str("<")) 
     {
-      PARSE_ERR("Missing <");
+      PARSE_ERR(Error_Missing_open_bracket);
     }
     
     // Try to parse an [a-z0-9]+ as a tag - 
@@ -316,7 +355,10 @@ private:
     const int nTags = sizeof(arrTags)/sizeof(arrTags[0]);
     if(find_arr(arrTags, nTags, sym.m_pBeg) == -1)
     {
-      PARSE_ERR("Unknown tag name");
+      auto save = pszText;
+      pszText = sym.m_pBeg;
+      PARSE_WARN(Error_Unknown_tag_name);
+      pszText = save;
     }
     
     // Parse attributes
@@ -338,11 +380,11 @@ private:
     {
       if(bIsVoidTag)
       {
-        PARSE_ERR("Missing > on void tag");
+        PARSE_ERR(Error_Missing_close_bracket_on_void_tag);
       }
       else
       {
-        PARSE_ERR("Missing > on open tag");
+        PARSE_ERR(Error_Missing_close_bracket_on_open_tag);
       }
     }
     
@@ -352,12 +394,14 @@ private:
   // Attempts to parse "</TAG>" given "TAG"
   constexpr void parse_close_tag(const char_view &symExpected)
   {
+    if( errRow > -1) return;
+    
     eat_space();
     
     // Try to parse the "</"
     if(!eat_str("</")) 
     {
-      PARSE_ERR("Expecting a close tag");
+      PARSE_ERR(Error_Expecting_a_close_tag);
     }
     
     // Try to parse the tag name
@@ -365,14 +409,17 @@ private:
     if(sym != symExpected) 
     {
       DUMP << "Expected '" << symExpected << "' got '" << sym << "'" << ENDL;
-      PARSE_ERR("Mismatched Close Tag");
+      auto save = pszText;
+      pszText = sym.begin();
+      PARSE_ERR(Error_Mismatched_Close_Tag);
+      pszText = save;
     }
     
     // Ignore space, parse >
     eat_space();
     if(!eat_str(">")) 
     {
-      PARSE_ERR("Missing > in close tag");
+      PARSE_ERR(Error_Missing_close_bracket_in_close_tag);
     }
     
     // Eat trailing space
@@ -382,6 +429,8 @@ private:
   // Creates a node "@attr" under the given node and chains attributes under it if any
   constexpr void append_attrs(cnode &node, node_attrs &attrs)
   {
+    if( errRow > -1) return;
+    
     // If there are any attributes, they become the first children of this node
     if(attrs.size())
     {
@@ -407,6 +456,8 @@ private:
   // TAG :: OPENTAG HTML CLOSETAG
   constexpr int parse_tag()
   {
+    if( errRow > -1) return 0;
+    
     // Parse the open tag, get its index
     int iCurrId = nodes.size();
     
@@ -434,6 +485,8 @@ private:
   // Parse text until a <, forbidding & and >, optionally trims whitespace on bothe ends
   constexpr int parse_text(bool bTrim)
   {
+    if(errRow > -1) return 0;
+    
     // make sure we have something
     check_eos();
     bool contentUnexpectedChars[256] = {0};
@@ -461,16 +514,18 @@ private:
   {
     // If we are out of text, were done
     // Else if we found a close tag, were done
-    if(*pszText && !is_close_tag())
+    if(*pszText && !is_close_tag() && errRow == -1)
     {
       // Parse either an open tag or text, get the new child nodes ID
       int iChild = -1;
       if(is_open_tag())
       {
+        if(errRow > -1) return false;
         iChild = parse_tag();
       }
       else
       {
+        if(errRow > -1) return false;
         // Trim the text unless the parent node is a <pre>
         iChild = parse_text(nodes[iParentId].tag != g_symPre);
       }
@@ -712,6 +767,7 @@ struct tree
     }
   }
 };
+
 
 } // namespace spt
 

@@ -1,2 +1,1 @@
-ParseError(((const char*)"Duplicate ID on tag")).ErrLine::operator[](((size_t)iLine))'
-array subscript value '12' is outside the bounds of array type 'int [0]'
+Warning() [with int ROW = 13; int COL = 14; WHAT = spt::Duplicate_ID_on_tag]':

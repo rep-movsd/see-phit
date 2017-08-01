@@ -1,5 +1,5 @@
 R"*(
-<span >
+<spaan>
   <p  color="red" height='1' weight="test" > 
     Extra whitespace after close and open tags
   </p  >
@@ -16,10 +16,10 @@ R"*(
     <IMG/>
   </DIV>
   
-  <P>Inline tag</P>
+  <PI>Inline tag</PI>
   <Span>Mixed case tag name</SPAN>
 
-</span>
+</spaan>
 
 <DIV>
   <DIV> 

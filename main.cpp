@@ -1,4 +1,5 @@
 #include <iostream>
+#include <type_traits>
 #include "seephit.h"
 using namespace std;
 
@@ -6,30 +7,15 @@ using namespace std;
 
 int main()
 {
-  constexpr spt::parser parser =
-    #include "test/large.spt"
-  
-  //parser.dump();
-  
-  //SPTDumper::dumpNode(parser.nodes);
+  constexpr auto parser = 
+    #include "test/valid.spt"
+    
+  REPORT_ERRORS(parser);
+    
   spt::tree spt_tree(parser);
-  
   spt::template_dict dct;
-  dct["name"] = "Mary";
-  dct["profession"] = "doctor";
-  dct["city"] = "London";
-  
-  spt_tree.root.render(cerr, dct);
+  spt_tree.root.render(cout, dct);
   cerr << endl;
-  
-  dct["city"] = "New York";
-  dct["name"] = "John";
-  dct["profession"] = "janitor";
-
-  spt_tree.root.render(cerr, dct);
-  cerr << endl;
-  
-  
-  
-  cerr << "Total nodes: " << parser.nodes.size() << endl;
 }
+
+

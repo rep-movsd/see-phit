@@ -1,2 +1,1 @@
-ParseError(((const char*)"Mismatched Close Tag")).ErrLine::operator[](((size_t)iLine))'
-array subscript value '5' is outside the bounds of array type 'int [0]'
+Error() [with int ROW = 6; int COL = 5; WHAT = spt::Mismatched_Close_Tag]':

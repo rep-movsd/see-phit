@@ -1,2 +1,1 @@
-ParseError(((const char*)"Unexpected character inside tag content")).ErrLine::operator[](((size_t)iLine))'
-array subscript value '2' is outside the bounds of array type 'int [0]'
+Error() [with int ROW = 5; int COL = 3; WHAT = spt::Unexpected_character_inside_tag_content]':
