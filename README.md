@@ -74,47 +74,34 @@ This is a bad closing tag
 </DIVV>
 ```
 
-Generates the compiler errors in gcc:
+Generates the following compile errors in gcc:
 
 ```
-  $ g++ --std=c++14  -Wall main.cpp
-  In file included from seephit.h:21:0,
-                  from main.cpp:3:
-  parse_error.h: In instantiation of 'constexpr spt::Error<ROW, COL, WHAT>::Error() [with int ROW = 4; int COL = 3; WHAT = spt::Mismatched_Close_Tag]':
-  parse_error.h:46:26:   required from here
-  parse_error.h:40:15: error: incompatible types in assignment of 'const int' to 'char [0]'
-      SPTParser = fatal;
-      ~~~~~~~~~~^~~~~~~
-  In file included from parse_error.h:6:0,
-                  from seephit.h:21,
-                  from main.cpp:3:
-  main.cpp: In function 'int main()':
-  parse_error_generated.h:100:93: note: synthesized method 'constexpr spt::IF<true, spt::Error<4, 3, spt::Mismatched_Close_Tag> >::IF()' first required here
-  spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> p;
-                                                                                              ^
-  main.cpp:11:3: note: in expansion of macro 'REPORT_ERRORS'
-    REPORT_ERRORS(parser);
-    ^~~~~~~~~~~~~
+$ g++ --std=c++14  -Wall main.cpp
+In file included from seephit.h:21:0,
+                 from main.cpp:3:
+parse_error.h: In instantiation of 'constexpr spt::Error<ROW, COL, WHAT>::Error() [with int ROW = 4; int COL = 3; WHAT = spt::Mismatched_Close_Tag]':
+main.cpp:13:3:   required from here
+parse_error.h:40:15: error: incompatible types in assignment of 'const int' to 'char [0]'
+     SPTParser = fatal;
+     ~~~~~~~~~~^~~~~~~
 ```
     
 And the following in clang:
 
 ```
-$ clang++ --std=c++14 main.cpp
+$ clang++ --std=c++14 -Wall main.cpp
 In file included from main.cpp:3:
 In file included from ./seephit.h:21:
 ./parse_error.h:40:15: error: array type 'char [0]' is not assignable
     SPTParser = fatal;
     ~~~~~~~~~ ^
-./parse_error.h:46:26: note: in instantiation of member function 'spt::Error<4, 3, spt::Mismatched_Close_Tag>::Error' requested here
-template<class T> struct IF<true, T> { T it; };
-                         ^
-main.cpp:11:3: note: implicit default constructor for 'spt::IF<true, spt::Error<4, 3, spt::Mismatched_Close_Tag> >' first required here
+main.cpp:13:3: note: in instantiation of member function 'spt::Error<4, 3, spt::Mismatched_Close_Tag>::Error' requested here
   REPORT_ERRORS(parser);
   ^
-./parse_error_generated.h:100:93: note: expanded from macro 'REPORT_ERRORS'
-spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> p;
-                                                                                            ^
+./parse_error_generated.h:100:94: note: expanded from macro 'REPORT_ERRORS'
+spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> {};
+                                                                                             ^
 1 error generated.
 ```
 
