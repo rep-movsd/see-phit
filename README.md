@@ -76,48 +76,51 @@ This is a bad closing tag
 
 Generates the compiler errors in gcc:
 
-    $ g++ -Wall main.cpp
-    main.cpp: In function 'int main()':
-    main.cpp:8:3:   in constexpr expansion of 'operator""_html(const char*, size_t)(59)'
-    seephit.h:716:20:   in constexpr expansion of '(&#'result_decl' not supported by dump_expr#<expression error>)->spt::parser::parse_html(-1)'
-    seephit.h:126:26:   in constexpr expansion of '((spt::parser*)this)->spt::parser::parse_close_tag(symTag)'
-    seephit.h:486:7:   in constexpr expansion of 'ParseError(((const char*)"Mismatched Close Tag")).ErrLine::operator[](((size_t)iLine))'
-    main.cpp:8:3: error: array subscript value '3' is outside the bounds of array type 'int [0]'
-
+```
+  $ g++ --std=c++14  -Wall main.cpp
+  In file included from seephit.h:21:0,
+                  from main.cpp:3:
+  parse_error.h: In instantiation of 'constexpr spt::Error<ROW, COL, WHAT>::Error() [with int ROW = 4; int COL = 3; WHAT = spt::Mismatched_Close_Tag]':
+  parse_error.h:46:26:   required from here
+  parse_error.h:40:15: error: incompatible types in assignment of 'const int' to 'char [0]'
+      SPTParser = fatal;
+      ~~~~~~~~~~^~~~~~~
+  In file included from parse_error.h:6:0,
+                  from seephit.h:21,
+                  from main.cpp:3:
+  main.cpp: In function 'int main()':
+  parse_error_generated.h:100:93: note: synthesized method 'constexpr spt::IF<true, spt::Error<4, 3, spt::Mismatched_Close_Tag> >::IF()' first required here
+  spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> p;
+                                                                                              ^
+  main.cpp:11:3: note: in expansion of macro 'REPORT_ERRORS'
+    REPORT_ERRORS(parser);
+    ^~~~~~~~~~~~~```
+    
 And the following in clang:
 
-    $ clang++ --std=c++14 main.cpp
-    main.cpp:7:18: error: constexpr variable 'parser' must be initialized by a constant expression
-      constexpr auto parser =
-                    ^
-    ./seephit_debug.h:29:48: note: cannot refer to element 3 of array of 0 elements in a constant expression
-      constexpr int &operator[](size_t i) { return dummy[i];};
-                                                  ^
-    ./seephit.h:486:7: note: in call to '&ParseError("Mismatched Close Tag")->operator[](3)'
-          PARSE_ERR("Mismatched Close Tag");
-          ^
-    ./seephit_debug.h:39:25: note: expanded from macro 'PARSE_ERR'
-    int iLine = cur_line(); \
-                            ^
-    ./seephit.h:126:11: note: in call to '&parser->parse_close_tag(parser.nodes.m_Nodes[0].tag)'
-              parse_close_tag(symTag);
-              ^
-    ./seephit.h:716:10: note: in call to '&parser->parse_html(-1)'
-      parser.parse_html(-1);
-            ^
-    main.cpp:8:3: note: in call to 'operator""_html(&"\n    <DIV>\n    Mismatched closing tag\n    </DIVV>\n    \n    "[0], 59)'
-      R"*(
-      ^
-    1 error generated.
+```$ clang++ --std=c++14 main.cpp
+In file included from main.cpp:3:
+In file included from ./seephit.h:21:
+./parse_error.h:40:15: error: array type 'char [0]' is not assignable
+    SPTParser = fatal;
+    ~~~~~~~~~ ^
+./parse_error.h:46:26: note: in instantiation of member function 'spt::Error<4, 3, spt::Mismatched_Close_Tag>::Error' requested here
+template<class T> struct IF<true, T> { T it; };
+                         ^
+main.cpp:11:3: note: implicit default constructor for 'spt::IF<true, spt::Error<4, 3, spt::Mismatched_Close_Tag> >' first required here
+  REPORT_ERRORS(parser);
+  ^
+./parse_error_generated.h:100:93: note: expanded from macro 'REPORT_ERRORS'
+spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> p;
+                                                                                            ^
+1 error generated.```
 
-The error "Mismatched Close Tag" is reported along with the '3' which represents the line number in which the error occured.
+Some complicated template magic has been implemented to show the ROW and COLUMN in the text where the error occured.
+gcc actually prints ROW = xxx and COL = xxx, which is great!
 If your IDE does background parsing, it will indicate that your HTML template is malformed as you type it.
 
 ### Limitations
-For some reason after I rewrote the parser, gcc 7.11 with O3 seems to take forever to compile. clang seems to take the same time for any optimization level.
-Perhaps it's a compiler bug.
-
-There seems to be no way to output any sort of diagnostic as a warning when the compile time exection happens. So we cannot support warnings, only fatal errors.
+The number of maximum nodes and attributes per parse is hardcoded to 1024.
 
 ### Future plans
 Add more complicated templating functionality with loops, conditionals and perhaps lambdas, and also allow this to be used on the frontend JS with emscripten.
