@@ -94,11 +94,13 @@ Generates the compiler errors in gcc:
                                                                                               ^
   main.cpp:11:3: note: in expansion of macro 'REPORT_ERRORS'
     REPORT_ERRORS(parser);
-    ^~~~~~~~~~~~~```
+    ^~~~~~~~~~~~~
+```
     
 And the following in clang:
 
-```$ clang++ --std=c++14 main.cpp
+```
+$ clang++ --std=c++14 main.cpp
 In file included from main.cpp:3:
 In file included from ./seephit.h:21:
 ./parse_error.h:40:15: error: array type 'char [0]' is not assignable
@@ -113,7 +115,8 @@ main.cpp:11:3: note: implicit default constructor for 'spt::IF<true, spt::Error<
 ./parse_error_generated.h:100:93: note: expanded from macro 'REPORT_ERRORS'
 spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> p;
                                                                                             ^
-1 error generated.```
+1 error generated.
+```
 
 Some complicated template magic has been implemented to show the ROW and COLUMN in the text where the error occured.
 gcc actually prints ROW = xxx and COL = xxx, which is great!
