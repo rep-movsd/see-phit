@@ -429,7 +429,6 @@ private:
       {
         pszText = sym.begin();
         PARSE_ERR(Error_Mismatched_Close_Tag);
-        pszText = save;
       }
     }
     
