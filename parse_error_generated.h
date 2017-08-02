@@ -97,7 +97,7 @@ DUMP_WARNING(17);                       \
 DUMP_WARNING(18);                       \
 DUMP_WARNING(19);                       \
 constexpr bool hasErr = parser.errRow > -1 || parser.errCol > -1; \
-spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> p;
+spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> {};
 
 #else
 

@@ -61,7 +61,7 @@ if(x < n)                                                      \\
 constexpr int n = parser.warns.size();          \\
 ${dumps}
 constexpr bool hasErr = parser.errRow > -1 || parser.errCol > -1; \\
-spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> p;
+spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> {};
 
 #else
 

@@ -86,10 +86,23 @@ struct parser
       cerr << endl;
     }
   }
-  
-  
  
 private:
+
+  // Helper for error handling construct
+  struct saver
+  {
+    const char *saved = nullptr;
+    bool done = true;
+    constexpr saver(): saved(){}
+    constexpr saver(const char *saved): saved(saved) {}
+    constexpr const char *finish() {done = false; return saved;}
+  };
+  
+  // Macro to execute a block of code, saving and restoring the a value across it
+  #define WITH_SAVE_POS  for(saver s(pszText); s.done; pszText = s.finish())
+  
+
   const char *pszText = nullptr;  // Position in the stream
   const char *pszStart = nullptr;
   
@@ -180,6 +193,7 @@ private:
     return true;
   }
   
+  
   // Consume stuff until ch is encountered
   constexpr const char_view eat_until(char ch, const bool *unExpected)
   {
@@ -188,10 +202,11 @@ private:
     {
       if(unExpected && unExpected[(unsigned char)(*sym.m_pEnd)])
       {
-        auto save = pszText;
-        pszText = sym.m_pEnd;
-        PARSE_ERR(Error_Unexpected_character_inside_tag_content);
-        pszText = save;
+        for(saver s(pszText); s.done; pszText = s.finish())
+        {
+          pszText = sym.m_pEnd;
+          PARSE_ERR(Error_Unexpected_character_inside_tag_content);
+        }
         break;
       }
       sym.m_pEnd++;
@@ -229,16 +244,15 @@ private:
   constexpr bool is_close_tag()
   {
     // Save the pointer, eat whitespace
-    auto saved = pszText;
-    eat_space();
-    
-    if(pszText[0] == '<' && pszText[1] == '/')
+    WITH_SAVE_POS
     {
-      return is_alpha(pszText[2]);
+      eat_space();
+      
+      if(pszText[0] == '<' && pszText[1] == '/')
+      {
+        return is_alpha(pszText[2]);
+      }
     }
-    
-    // restore saved pointer
-    pszText = saved;
     return false;
   }
   
@@ -289,10 +303,11 @@ private:
           if(!ids.addSym(value))
           {
             // Save the pointer, point it to the start of symbol, for the warning
-            auto save = pszText ;
-            pszText = value.begin();
-            PARSE_WARN(Error_Duplicate_ID_on_tag);
-            pszText = save;
+            WITH_SAVE_POS
+            {
+              pszText = value.begin();
+              PARSE_WARN(Error_Duplicate_ID_on_tag);
+            }
           }
           
           nodes.back().id = value;
@@ -355,10 +370,11 @@ private:
     const int nTags = sizeof(arrTags)/sizeof(arrTags[0]);
     if(find_arr(arrTags, nTags, sym.m_pBeg) == -1)
     {
-      auto save = pszText;
-      pszText = sym.m_pBeg;
-      PARSE_WARN(Error_Unknown_tag_name);
-      pszText = save;
+      WITH_SAVE_POS
+      {
+        pszText = sym.m_pBeg;
+        PARSE_WARN(Error_Unknown_tag_name);
+      }
     }
     
     // Parse attributes
@@ -409,10 +425,12 @@ private:
     if(sym != symExpected) 
     {
       DUMP << "Expected '" << symExpected << "' got '" << sym << "'" << ENDL;
-      auto save = pszText;
-      pszText = sym.begin();
-      PARSE_ERR(Error_Mismatched_Close_Tag);
-      pszText = save;
+      WITH_SAVE_POS
+      {
+        pszText = sym.begin();
+        PARSE_ERR(Error_Mismatched_Close_Tag);
+        pszText = save;
+      }
     }
     
     // Ignore space, parse >
