@@ -116,3 +116,6 @@ The number of maximum nodes and attributes per parse is hardcoded to 1024.
 Add more complicated templating functionality with loops, conditionals and perhaps lambdas, and also allow this to be used on the frontend JS with emscripten.
 
 Optimize the hell out of the templating engine
+
+ # Join the team 
+ Do you want to collaborate? Join the project at https://crowdforge.io/projects/265
