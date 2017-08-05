@@ -1,3 +1,6 @@
+#ifndef SEEPHIT_DEBUG_H
+#define SEEPHIT_DEBUG_H
+
 #pragma once 
 
 // Allow runtime debugging for development
@@ -19,7 +22,7 @@
 
 struct DummyOutStream
 {
-  template<typename T>  constexpr const DummyOutStream& operator <<(const T &) const { return *this;}
+  template<typename T>  constexpr const DummyOutStream& operator <<(const T & /*unused*/) const { return *this;}
 };
 
 constexpr DummyOutStream DummyOut;
@@ -31,7 +34,7 @@ struct ErrLine
 };
 
 // Dummy function to prettify compile-time errors
-constexpr ErrLine ParseError(const char*)
+constexpr ErrLine ParseError(const char* /*unused*/)
 {
   return ErrLine{};
 }
@@ -40,5 +43,7 @@ constexpr ErrLine ParseError(const char*)
 #define PARSE_WARN(x) warns.push_back(Message(x, cur_row(), cur_col()))
 
 
+
+#endif
 
 #endif

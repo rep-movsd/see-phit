@@ -1,5 +1,5 @@
-#ifndef SEE_PHIT_TAGS_HPP
-#define SEE_PHIT_TAGS_HPP
+#ifndef SEEPHIT_TAGS_H
+#define SEEPHIT_TAGS_H
 
 constexpr const char* arrVoidTags[] = 
 {

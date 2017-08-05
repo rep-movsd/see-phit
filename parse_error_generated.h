@@ -1,4 +1,7 @@
 
+#ifndef SEEPHIT_PARSE_ERROR_GENERATED_H
+#define SEEPHIT_PARSE_ERROR_GENERATED_H
+
 enum Messages
 {
   Error_None,
@@ -37,20 +40,20 @@ struct Missing_close_bracket_in_close_tag {};
 template<Messages m> struct MsgToType{};
 
 template<> struct MsgToType<Error_None>{typedef None type;};
-template<> struct MsgToType<Error_Expecting_an_identifier>{typedef Expecting_an_identifier type;}; 
-template<> struct MsgToType<Error_Unexpected_character_inside_tag_content>{typedef Unexpected_character_inside_tag_content type;}; 
-template<> struct MsgToType<Error_Expecting_a_tag_name_after_open_bracket>{typedef Expecting_a_tag_name_after_open_bracket type;}; 
-template<> struct MsgToType<Error_Expecting_open_quote_for_attribute_value>{typedef Expecting_open_quote_for_attribute_value type;}; 
-template<> struct MsgToType<Error_Empty_value_for_non_boolean_attribute>{typedef Empty_value_for_non_boolean_attribute type;}; 
-template<> struct MsgToType<Error_Duplicate_ID_on_tag>{typedef Duplicate_ID_on_tag type;}; 
-template<> struct MsgToType<Error_Expecting_a_value_for_attribute>{typedef Expecting_a_value_for_attribute type;}; 
-template<> struct MsgToType<Error_Missing_open_bracket>{typedef Missing_open_bracket type;}; 
-template<> struct MsgToType<Error_Unknown_tag_name>{typedef Unknown_tag_name type;}; 
-template<> struct MsgToType<Error_Missing_close_bracket_on_void_tag>{typedef Missing_close_bracket_on_void_tag type;}; 
-template<> struct MsgToType<Error_Missing_close_bracket_on_open_tag>{typedef Missing_close_bracket_on_open_tag type;}; 
-template<> struct MsgToType<Error_Expecting_a_close_tag>{typedef Expecting_a_close_tag type;}; 
-template<> struct MsgToType<Error_Mismatched_Close_Tag>{typedef Mismatched_Close_Tag type;}; 
-template<> struct MsgToType<Error_Missing_close_bracket_in_close_tag>{typedef Missing_close_bracket_in_close_tag type;}; 
+template<> struct MsgToType<Error_Expecting_an_identifier>{using type = Expecting_an_identifier;}; 
+template<> struct MsgToType<Error_Unexpected_character_inside_tag_content>{using type = Unexpected_character_inside_tag_content;}; 
+template<> struct MsgToType<Error_Expecting_a_tag_name_after_open_bracket>{using type = Expecting_a_tag_name_after_open_bracket;}; 
+template<> struct MsgToType<Error_Expecting_open_quote_for_attribute_value>{using type = Expecting_open_quote_for_attribute_value;}; 
+template<> struct MsgToType<Error_Empty_value_for_non_boolean_attribute>{using type = Empty_value_for_non_boolean_attribute;}; 
+template<> struct MsgToType<Error_Duplicate_ID_on_tag>{using type = Duplicate_ID_on_tag;}; 
+template<> struct MsgToType<Error_Expecting_a_value_for_attribute>{using type = Expecting_a_value_for_attribute;}; 
+template<> struct MsgToType<Error_Missing_open_bracket>{using type = Missing_open_bracket;}; 
+template<> struct MsgToType<Error_Unknown_tag_name>{using type = Unknown_tag_name;}; 
+template<> struct MsgToType<Error_Missing_close_bracket_on_void_tag>{using type = Missing_close_bracket_on_void_tag;}; 
+template<> struct MsgToType<Error_Missing_close_bracket_on_open_tag>{using type = Missing_close_bracket_on_open_tag;}; 
+template<> struct MsgToType<Error_Expecting_a_close_tag>{using type = Expecting_a_close_tag;}; 
+template<> struct MsgToType<Error_Mismatched_Close_Tag>{using type = Mismatched_Close_Tag;}; 
+template<> struct MsgToType<Error_Missing_close_bracket_in_close_tag>{using type = Missing_close_bracket_in_close_tag;}; 
 
 #ifndef SPT_DEBUG
 
@@ -105,4 +108,5 @@ spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.e
 
 #endif
 
+#endif
 

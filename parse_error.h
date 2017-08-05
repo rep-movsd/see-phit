@@ -1,3 +1,6 @@
+#ifndef SEEPHIT_PARSE_ERROR_H
+#define SEEPHIT_PARSE_ERROR_H
+
 #pragma once 
 
 namespace spt
@@ -48,4 +51,5 @@ template<class T> struct IF<false, T> {};
 
 
 
-} // namespace
+}  // namespace spt
+#endif

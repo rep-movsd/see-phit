@@ -1,3 +1,6 @@
+#ifndef SEEPHIT_UTIL_H
+#define SEEPHIT_UTIL_H
+
 #pragma once
 
 namespace spt
@@ -146,10 +149,10 @@ public:
 // Implements comparision and ostream serialization 
 struct char_view
 {
-  const char *m_pBeg;
-  const char *m_pEnd;
+  const char *m_pBeg{};
+  const char *m_pEnd{};
   
-  constexpr char_view(): m_pBeg(), m_pEnd() {}
+  constexpr char_view() {}
   constexpr char_view(const char *pBeg, const char *pEnd): m_pBeg(pBeg), m_pEnd(pEnd) {}
   constexpr char_view(const char *p): m_pBeg(p), m_pEnd(p)
   {
@@ -302,7 +305,7 @@ struct attr
   char_view name;      
   char_view value;  
   
-  constexpr attr(){}
+  constexpr attr()= default;
   constexpr attr(const char_view &name, const char_view &value):
   name(name), value(value) {}
   
@@ -399,4 +402,6 @@ struct cnode
 };
 
 
-}
+} // namespace spt
+
+#endif

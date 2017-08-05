@@ -22,7 +22,7 @@ function makeStruct(e) {return 'struct ' + e + ' {};';}
 const structs = errs.map(makeStruct).join('\n');
 
 
-function makeMsgToType(e) {return `template<> struct MsgToType<Error_${e}>{typedef ${e} type;}; `}
+function makeMsgToType(e) {return `template<> struct MsgToType<Error_${e}>{using type = ${e};}; `}
 const MsgToType = errs.map(makeMsgToType).join('\n');
 
 
@@ -34,6 +34,9 @@ function makeDump(e) {return `DUMP_WARNING(${e});                       \\`}
 const dumps = Array.apply(null, {length: N}).map(Number.call, Number).map(makeDump).join('\n');
 
 const template = `
+#ifndef SEEPHIT_PARSE_ERROR_GENERATED_H
+#define SEEPHIT_PARSE_ERROR_GENERATED_H
+
 enum Messages
 {
   Error_None,
@@ -69,6 +72,7 @@ spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.e
 
 #endif
 
+#endif
 `;
 
 console.log(template);

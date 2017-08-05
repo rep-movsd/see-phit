@@ -1,11 +1,14 @@
+#ifndef SEEPHIT_SEEPHIT_H
+#define SEEPHIT_SEEPHIT_H
+
 #pragma once
-#include <cassert>
-#include <string>
-#include <vector>
-#include <map>
-#include <utility>
 #include <algorithm>
+#include <cassert>
 #include <iostream>
+#include <map>
+#include <string>
+#include <utility>
+#include <vector>
 
 using std::string;
 using std::vector;
@@ -16,14 +19,14 @@ using std::ostream;
 using std::cerr;
 using std::endl;
 
+#include "debug.h"
+#include "parse_error.h"
 #include "tags.hpp"
 #include "util.h"
-#include "parse_error.h"
-#include "debug.h"
 
 // maximum nodes and attributes in the tree
-#define SPT_MAX_NODES 1024
-#define SPT_MAX_ATTRS 1024
+#define SPT_MAX_NODES 2048
+#define SPT_MAX_ATTRS 2048
 #define SPT_MAX_WARNINGS 20
 #define SPT_MAX_ATTR_PER_NODE 16
 
@@ -31,10 +34,10 @@ namespace spt
 {
 
  
-typedef vec<attr, SPT_MAX_ATTRS> attrs;
-typedef vec<cnode, SPT_MAX_NODES> cnodes;
-typedef vec<attr, SPT_MAX_ATTR_PER_NODE> node_attrs;
-typedef vec<Message, SPT_MAX_WARNINGS> warnings;
+using attrs = vec<attr, SPT_MAX_ATTRS>;
+using cnodes = vec<cnode, SPT_MAX_NODES>;
+using node_attrs = vec<attr, SPT_MAX_ATTR_PER_NODE>;
+using warnings = vec<Message, SPT_MAX_WARNINGS>;
 
 
 
@@ -61,7 +64,7 @@ struct parser
   int errCol = -1;
   
   
-  constexpr parser(const char *pszText): pszText(pszText), pszStart(pszText) {}
+  constexpr explicit parser(const char *pszText): pszText(pszText), pszStart(pszText) {}
 
   // Parse grammar
   // HTML     :: CONTENT | CONTENT HTML
@@ -94,8 +97,7 @@ private:
   {
     const char *saved = nullptr;
     bool done = true;
-    constexpr saver(): saved(){}
-    constexpr saver(const char *saved): saved(saved) {}
+    constexpr explicit saver(const char *saved): saved(saved) {}
     constexpr const char *finish() {done = false; return saved;}
   };
   
@@ -135,7 +137,7 @@ private:
   // Raises compiletime error if no more characters left to parse
   constexpr void check_eos()
   {
-    bool eos = !*pszText;
+    bool eos = *pszText == 0;
     if(eos) 
     {
     //  PARSE_ERR(Error_Unexpected_end_of_stream);
@@ -146,7 +148,8 @@ private:
   // For simplicity assume anything below ascii 33 is white space
   constexpr void eat_space()
   {
-    while(*pszText <= 32 && *pszText) ++pszText;
+    while(*pszText <= 32 && (*pszText != 0)) { ++pszText;
+}
   }
   
   // Consumes [a-z]+
@@ -156,7 +159,8 @@ private:
     check_eos();
     
     char_view sym(pszText, pszText);
-    while(isX(*sym.m_pEnd)) sym.m_pEnd++;
+    while(isX(*sym.m_pEnd)) { sym.m_pEnd++;
+}
     
     // Ensure at least 1 character is consumed
     if(sym.empty()) 
@@ -506,7 +510,7 @@ private:
     
     // make sure we have something
     check_eos();
-    bool contentUnexpectedChars[256] = {0};
+    bool contentUnexpectedChars[256] = {false};
     contentUnexpectedChars[int('>')] = true;
     //contentUnexpectedChars[int('&')] = true;
     auto text = eat_until('<', contentUnexpectedChars);
@@ -599,12 +603,12 @@ class rnode
   template_text templates;
   
   // Whether its a void node
-  bool bVoid;
+  bool bVoid{};
   
   int index;
   
 public:
-  rnode(): bVoid(), index(NULL_NODE) {}
+  rnode():  index(NULL_NODE) {}
 
   rnode(const char_view &tag, const char_view &text, bool bVoid, int index, template_dict &dctTemplates) 
     : tag(tag), text(text), bVoid(bVoid), index(index) 
@@ -668,7 +672,7 @@ public:
     {
       ostr << sIndent << "<" << tag;
       
-      if(id.size())
+      if(!id.empty())
       {
         ostr << " ID" << "='" << id << '\'';
       }
@@ -680,7 +684,7 @@ public:
       
       ostr << ">";
       
-      if(children.size()) 
+      if(!children.empty()) 
       {
         ostr << "\n";
       }
@@ -694,7 +698,7 @@ public:
     // Skip text and close tag for void tags
     if(!bVoid)
     {
-      if(templates.parts().size())
+      if(!templates.parts().empty())
       {
         ostr << sIndent;
         templates.render(ostr, dctTemplates);
@@ -740,7 +744,7 @@ struct tree
     
     // Create a SPTNode and set ID if any
     rnode rNode(cNode.tag, cNode.text, cNode.child == VOID_TAG, index, dctTemplates);
-    if(cNode.id.size())
+    if(!cNode.id.empty())
     {
       rNode.id = cNode.id;
     }
@@ -788,10 +792,15 @@ struct tree
 
 } // namespace spt
 
-constexpr spt::parser operator"" _html(const char *pszText, size_t)
+constexpr spt::parser operator"" _html(const char *pszText, size_t /*unused*/)
 {
   spt::parser parser(pszText);
   parser.parse_html(spt::NULL_NODE);
   return parser;
 }
 
+
+
+
+
+#endif
