@@ -761,7 +761,7 @@ struct tree
       {
         // Put the chain of attribute nodes into ther attrs array
         auto attr = parser.nodes[child.child];
-        while(1)
+        while(true)
         {
           parent.children.back().attrs[attr.getTag()] = attr.getText();
           if(attr.sibling == NULL_NODE) break;

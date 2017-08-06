@@ -48,15 +48,15 @@ ${structs}
 
 template<Messages m> struct MsgToType{};
 
-template<> struct MsgToType<Error_None>{typedef None type;};
+template<> struct MsgToType<Error_None>{using type = None;};
 ${MsgToType}
 
 #ifndef SPT_DEBUG
 
 #define DUMP_WARNING(x)                                        \\
-if(x < n)                                                      \\
+if((x) < n)                                                      \\
 {                                                              \\
-  constexpr auto w = parser.warns[x];                          \\
+  constexpr auto w = parser.warns[(x)];                          \\
   ${warners}
 }
 

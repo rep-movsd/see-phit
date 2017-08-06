@@ -21,7 +21,7 @@ constexpr const char* arrVoidTags[] =
 constexpr const char *arrBoolAttrs[] = 
 {
   "checked",
-  "compact"
+  "compact",
   "declare",
   "defer",
   "disabled",

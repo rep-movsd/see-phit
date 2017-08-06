@@ -39,7 +39,7 @@ struct Missing_close_bracket_in_close_tag {};
 
 template<Messages m> struct MsgToType{};
 
-template<> struct MsgToType<Error_None>{typedef None type;};
+template<> struct MsgToType<Error_None>{using type = None;};
 template<> struct MsgToType<Error_Expecting_an_identifier>{using type = Expecting_an_identifier;}; 
 template<> struct MsgToType<Error_Unexpected_character_inside_tag_content>{using type = Unexpected_character_inside_tag_content;}; 
 template<> struct MsgToType<Error_Expecting_a_tag_name_after_open_bracket>{using type = Expecting_a_tag_name_after_open_bracket;}; 
@@ -58,9 +58,9 @@ template<> struct MsgToType<Error_Missing_close_bracket_in_close_tag>{using type
 #ifndef SPT_DEBUG
 
 #define DUMP_WARNING(x)                                        \
-if(x < n)                                                      \
+if((x) < n)                                                      \
 {                                                              \
-  constexpr auto w = parser.warns[x];                          \
+  constexpr auto w = parser.warns[(x)];                          \
   spt::IF<w.m == spt::Error_Expecting_an_identifier, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
   spt::IF<w.m == spt::Error_Unexpected_character_inside_tag_content, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
   spt::IF<w.m == spt::Error_Expecting_a_tag_name_after_open_bracket, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \

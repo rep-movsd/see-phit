@@ -11,7 +11,7 @@ const int VOID_TAG = -2;
 
  
 // Map of template names to values
-typedef map<string, string> template_dict;
+using template_dict = map<string, string>;
 
 // Basic constexpr functions for text processing
 constexpr char to_upper(char ch)
@@ -353,15 +353,15 @@ struct cnode
    * 
    */
   
-  constexpr cnode(): sibling(NULL_NODE), child(NULL_NODE), tag(), text(), id() {}
+  constexpr cnode(): sibling(NULL_NODE), child(NULL_NODE){}
   constexpr cnode(const cnode &n):
     sibling(n.sibling), child(n.child), tag(n.tag), text(n.text), id(n.id) {}
     
   constexpr cnode(const char_view &tag):
-    sibling(NULL_NODE), child(NULL_NODE), tag(tag), text(), id() {}
+    sibling(NULL_NODE), child(NULL_NODE), tag(tag){}
 
   constexpr cnode(const char_view &tag, const char_view &text):
-    sibling(NULL_NODE), child(NULL_NODE), tag(tag), text(text), id() {}
+    sibling(NULL_NODE), child(NULL_NODE), tag(tag), text(text){}
     
     
   void dump() const
