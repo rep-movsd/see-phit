@@ -152,19 +152,22 @@ struct char_view
   const char *m_pBeg{};
   const char *m_pEnd{};
   
-  constexpr char_view() {}
-  constexpr char_view(const char *pBeg, const char *pEnd): m_pBeg(pBeg), m_pEnd(pEnd) {}
-  constexpr char_view(const char *p): m_pBeg(p), m_pEnd(p)
+  constexpr char_view() = default;
+  constexpr char_view(const char *pBeg, const char *pEnd) noexcept : m_pBeg(pBeg), m_pEnd(pEnd) {}
+  constexpr char_view(const char *p) noexcept : m_pBeg(p), m_pEnd(p) 
   {
-    while(*m_pEnd) m_pEnd++;
+    if(m_pEnd)
+    {
+      while(*m_pEnd) m_pEnd++;
+    }
   }
   
-  constexpr size_t size() const       { return m_pEnd - m_pBeg; }
-  constexpr const char *begin() const { return m_pBeg; }
-  constexpr const char *end() const   { return m_pEnd; }
-  constexpr char back() const         { return m_pEnd[-1]; }
-  constexpr char front() const        { return m_pBeg[0]; }
-  constexpr bool empty() const        { return size() == 0; }
+  constexpr size_t size() const noexcept        { return m_pEnd - m_pBeg; }
+  constexpr const char *begin() const noexcept  { return m_pBeg; }
+  constexpr const char *end() const noexcept    { return m_pEnd; }
+  constexpr bool empty() const noexcept         { return size() == 0; }
+  constexpr char back() const                   { return m_pEnd[-1]; }
+  constexpr char front() const                  { return m_pBeg[0]; }
   
   constexpr bool operator==(const char_view &that) const
   {
@@ -301,15 +304,11 @@ struct sym_tab
 
 struct attr 
 {
-  //int node;
   char_view name;      
   char_view value;  
   
-  constexpr attr()= default;
-  constexpr attr(const char_view &name, const char_view &value):
-  name(name), value(value) {}
-  
-  constexpr attr(const attr &a): name(a.name), value(a.value){}
+  constexpr attr() noexcept = default;
+  constexpr attr(const char_view &name, const char_view &value): name(name), value(value) {}
 };
 
 struct cnode
@@ -353,9 +352,7 @@ struct cnode
    * 
    */
   
-  constexpr cnode(): sibling(NULL_NODE), child(NULL_NODE){}
-  constexpr cnode(const cnode &n):
-    sibling(n.sibling), child(n.child), tag(n.tag), text(n.text), id(n.id) {}
+  constexpr cnode() = default;
     
   constexpr cnode(const char_view &tag):
     sibling(NULL_NODE), child(NULL_NODE), tag(tag){}
@@ -394,8 +391,8 @@ struct cnode
     return string(b, e);
   };
   
-  int sibling;
-  int child;
+  int sibling = NULL_NODE;
+  int child = NULL_NODE;
   char_view tag;
   char_view text;
   char_view id;

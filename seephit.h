@@ -204,7 +204,7 @@ private:
     char_view sym(pszText, pszText);
     while(*sym.m_pEnd && *sym.m_pEnd != ch) 
     {
-      if(unExpected && unExpected[(unsigned char)(*sym.m_pEnd)])
+      if(unExpected && unExpected[static_cast<unsigned char>(*sym.m_pEnd)])
       {
         for(saver s(pszText); s.done; pszText = s.finish())
         {
@@ -588,7 +588,7 @@ class rnode
 {
   friend struct tree;
   
-  typedef map<string, string> attr_dict; 
+  using attr_dict = map<string, string>; 
   
   // children if any
   vector<rnode> children;
