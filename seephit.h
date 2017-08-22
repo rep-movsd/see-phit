@@ -57,6 +57,9 @@ struct parser
   
   int errRow = -1;
   int errCol = -1;
+  
+  // Macro to quit the current function if error
+  #define ON_ERR_RETURN if(errRow > -1) return
     
   constexpr explicit parser(const char *pszText): pszText(pszText), pszStart(pszText) {}
 
@@ -70,7 +73,7 @@ struct parser
   // symEndTag represents the point at which the parsing should stop
   constexpr void parse_html(int iParentId)
   {
-    while(parse_content(iParentId));
+    while(errRow ==-1 && parse_content(iParentId));
   }
       
   void dump() const 
@@ -88,7 +91,7 @@ private:
 
   // Helper for error handling construct
   // Use as follows:
-  // for(saver s(pszText); s.done; pszText = s.finish())
+  // WITH_SAVE_POS { ... }
   struct saver
   {
     const char *saved = nullptr;
@@ -99,7 +102,7 @@ private:
   
   // Macro to execute a block of code, saving and restoring the a value across it
   #define WITH_SAVE_POS for(saver s(pszText); s.done; pszText = s.finish())
-  
+ 
 
   const char *pszText = nullptr;  // Position in the stream
   const char *pszStart = nullptr;
@@ -343,7 +346,7 @@ private:
   // No space allowed between < and tag name
   constexpr bool parse_open_tag(node_attrs &attrs)
   {
-    if(errRow > -1) return false;
+    ON_ERR_RETURN false;
     
     // Left trim whitespace
     eat_space();
@@ -381,7 +384,7 @@ private:
     
     // Parse attributes
     while(parse_attrs(attrs));
-    if(errRow > -1) return false;
+    ON_ERR_RETURN false;
     
     // Check if void tag
     const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
@@ -476,7 +479,7 @@ private:
   // TAG :: OPENTAG HTML CLOSETAG
   constexpr int parse_tag()
   {
-    if(errRow > -1) return 0;
+    ON_ERR_RETURN 0;
     
     // Parse the open tag, get its index
     int iCurrId = nodes.size();
