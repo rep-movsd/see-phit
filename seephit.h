@@ -73,7 +73,7 @@ struct parser
   // symEndTag represents the point at which the parsing should stop
   constexpr void parse_html(int iParentId)
   {
-    while(errRow ==-1 && parse_content(iParentId));
+    while(errRow == -1 && parse_content(iParentId));
   }
       
   void dump() const 
@@ -262,7 +262,7 @@ private:
   // NAME is a sequence of [a-z\-] and VALUE is "text", 'text' or {text}
   constexpr bool parse_attrs(node_attrs &attrs)
   {
-    if(errRow > -1) return false;
+    ON_ERR_RETURN false;
     
     // Swallow any space
     eat_space();
@@ -292,7 +292,7 @@ private:
         }
         
         check_eos();
-        if(errRow > -1) return false;
+        ON_ERR_RETURN false;
 
         // Eat the close delim
         pszText++;
@@ -416,7 +416,7 @@ private:
   // Attempts to parse "</TAG>" given "TAG"
   constexpr void parse_close_tag(const char_view &symExpected)
   {
-    if(errRow > -1) return;
+    ON_ERR_RETURN;
     
     eat_space();
     
@@ -452,7 +452,7 @@ private:
   // Creates a node "@attr" under the given node and chains attributes under it if any
   constexpr void append_attrs(cnode &node, node_attrs &attrs)
   {
-    if(errRow > -1) return;
+    ON_ERR_RETURN;
     
     // If there are any attributes, they become the first children of this node
     if(attrs.size())
@@ -505,20 +505,8 @@ private:
     return iCurrId;
   }
   
-  // Parse text until a <, forbidding & and >, optionally trims whitespace on bothe ends
-  constexpr int parse_text(bool bTrim)
+  constexpr void check_template_braces(const char_view &text)
   {
-    if(errRow > -1) return 0;
-    
-    // make sure we have something
-    check_eos();
-    bool contentUnexpectedChars[256] = {false};
-    contentUnexpectedChars[int('>')] = true;
-    auto text = eat_until('<', contentUnexpectedChars);
-    
-    // Make sure we have something left
-    check_eos();
-        
     // check if we have a '{{'
     int nBrace = 0;
     auto p = text.begin();
@@ -547,6 +535,24 @@ private:
     {
       PARSE_ERR(Error_Missing_close_brace_in_template);
     }
+  }
+  
+  // Parse text until a <, forbidding & and >, optionally trims whitespace on bothe ends
+  constexpr int parse_text(bool bTrim)
+  {
+    ON_ERR_RETURN 0;
+    
+    // make sure we have something
+    check_eos();
+    bool contentUnexpectedChars[256] = {false};
+    contentUnexpectedChars[int('>')] = true;
+    auto text = eat_until('<', contentUnexpectedChars);
+    
+    // Make sure we have something left
+    check_eos();
+        
+    // Check if the braces are {{ matching }}
+    check_template_braces(text);
     
     // Trim whitespace if needed
     if(bTrim)     
@@ -569,17 +575,19 @@ private:
     {
       // Parse either an open tag or text, get the new child nodes ID
       int iChild = -1;
-      if(is_open_tag())
+      bool bIsOpenTag = is_open_tag();
+      ON_ERR_RETURN false;
+      
+      if(bIsOpenTag)
       {
-        if(errRow > -1) return false;
         iChild = parse_tag();
       }
       else
       {
-        if(errRow > -1) return false;
         // Trim the text unless the parent node is a <pre>
         iChild = parse_text(nodes[iParentId].tag != g_symPre);
       }
+      ON_ERR_RETURN false;
       
       // If it's not the topmost level
       if(iParentId >= 0)

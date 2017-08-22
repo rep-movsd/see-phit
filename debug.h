@@ -39,9 +39,11 @@ constexpr ErrLine ParseError(const char* /*unused*/)
   return ErrLine{};
 }
 
-#define PARSE_ERR(x) errRow = cur_row(); errCol = cur_col(); err = x
-#define PARSE_WARN(x) warns.push_back(Message(x, cur_row(), cur_col()))
+// Set error message and location if not already set
+#define PARSE_ERR(x) if(errRow == -1) {errRow = cur_row(); errCol = cur_col(); err = x;}
 
+// Push warning message and location to list
+#define PARSE_WARN(x) warns.push_back(Message(x, cur_row(), cur_col()))
 
 
 #endif

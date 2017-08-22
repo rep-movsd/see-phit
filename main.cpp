@@ -8,7 +8,7 @@ using namespace std;
 int main()
 {
   constexpr auto parser = 
-    #include "test/large_template.spt"
+    #include "test/trunc.spt"
     
   REPORT_ERRORS(parser);
     
