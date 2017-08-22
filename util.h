@@ -242,6 +242,7 @@ inline ostream& operator<<(ostream &ostr, const char_view &sym)
 
 // Abstracts templatable text
 // A Sequence of char_view, pointing to eitehr plain text or template keys
+
 class template_text
 {
   // A sequence of char ranges, bool indicates if its a template

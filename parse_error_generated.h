@@ -19,7 +19,8 @@ enum Messages
   Error_Expecting_a_close_tag,
   Error_Mismatched_Close_Tag,
   Error_Missing_close_bracket_in_close_tag,
-  Error_Missing_close_brace_in_template
+  Error_Missing_close_brace_in_template,
+  Error_Unexpected_end_of_stream
 };
 
 struct None;
@@ -38,6 +39,7 @@ struct Expecting_a_close_tag {};
 struct Mismatched_Close_Tag {};
 struct Missing_close_bracket_in_close_tag {};
 struct Missing_close_brace_in_template {};
+struct Unexpected_end_of_stream {};
 
 template<Messages m> struct MsgToType{};
 
@@ -57,6 +59,7 @@ template<> struct MsgToType<Error_Expecting_a_close_tag>{using type = Expecting_
 template<> struct MsgToType<Error_Mismatched_Close_Tag>{using type = Mismatched_Close_Tag;}; 
 template<> struct MsgToType<Error_Missing_close_bracket_in_close_tag>{using type = Missing_close_bracket_in_close_tag;}; 
 template<> struct MsgToType<Error_Missing_close_brace_in_template>{using type = Missing_close_brace_in_template;}; 
+template<> struct MsgToType<Error_Unexpected_end_of_stream>{using type = Unexpected_end_of_stream;}; 
 
 #ifndef SPT_DEBUG
 
@@ -79,6 +82,7 @@ if((x) < n)                                                      \
   spt::IF<w.m == spt::Error_Mismatched_Close_Tag, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
   spt::IF<w.m == spt::Error_Missing_close_bracket_in_close_tag, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
   spt::IF<w.m == spt::Error_Missing_close_brace_in_template, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
+  spt::IF<w.m == spt::Error_Unexpected_end_of_stream, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
 }
 
 #define REPORT_ERRORS(parser)          \

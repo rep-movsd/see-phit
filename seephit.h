@@ -87,6 +87,8 @@ struct parser
 private:
 
   // Helper for error handling construct
+  // Use as follows:
+  // for(saver s(pszText); s.done; pszText = s.finish())
   struct saver
   {
     const char *saved = nullptr;
@@ -96,7 +98,7 @@ private:
   };
   
   // Macro to execute a block of code, saving and restoring the a value across it
-  #define WITH_SAVE_POS  for(saver s(pszText); s.done; pszText = s.finish())
+  #define WITH_SAVE_POS for(saver s(pszText); s.done; pszText = s.finish())
   
 
   const char *pszText = nullptr;  // Position in the stream
@@ -134,7 +136,7 @@ private:
     bool eos = *pszText == 0;
     if(eos) 
     {
-    //  PARSE_ERR(Error_Unexpected_end_of_stream);
+      PARSE_ERR(Error_Unexpected_end_of_stream);
     }
   }
   
@@ -142,8 +144,8 @@ private:
   // For simplicity assume anything below ascii 33 is white space
   constexpr void eat_space()
   {
-    while(*pszText <= 32 && (*pszText != 0)) { ++pszText;
-}
+    check_eos();
+    while(*pszText && *pszText <= 32) { ++pszText; }
   }
   
   // Consumes [a-z]+
@@ -153,8 +155,7 @@ private:
     check_eos();
     
     char_view sym(pszText, pszText);
-    while(isX(*sym.m_pEnd)) { sym.m_pEnd++;
-}
+    while(isX(*sym.m_pEnd)) { sym.m_pEnd++;}
     
     // Ensure at least 1 character is consumed
     if(sym.empty()) 
@@ -258,11 +259,10 @@ private:
   // NAME is a sequence of [a-z\-] and VALUE is "text", 'text' or {text}
   constexpr bool parse_attrs(node_attrs &attrs)
   {
-    if( errRow > -1) return false;
+    if(errRow > -1) return false;
     
     // Swallow any space
     eat_space();
-    check_eos();
     
     if(is_alpha(*pszText))
     { 
@@ -275,25 +275,29 @@ private:
       {
         // Check what delimiter is used " or ' 
         char chDelim = pszText[0];
-        if( chDelim != '"' && chDelim != '\'')
+        if(chDelim != '"' && chDelim != '\'')
         {
           PARSE_ERR(Error_Expecting_open_quote_for_attribute_value);
         }
         ++pszText;
-
-        check_eos();
         
         char_view value = eat_until(chDelim, nullptr);
+        
         if(value.empty())
         {
           PARSE_ERR(Error_Empty_value_for_non_boolean_attribute);
         }
+        
+        check_eos();
+        if(errRow > -1) return false;
 
         // Eat the close delim
         pszText++;
         
+        
         // Swallow any space
         eat_space();
+                
         
         // Is it an ID tag
         if(name == g_symID)
@@ -339,7 +343,7 @@ private:
   // No space allowed between < and tag name
   constexpr bool parse_open_tag(node_attrs &attrs)
   {
-    if( errRow > -1) return false;
+    if(errRow > -1) return false;
     
     // Left trim whitespace
     eat_space();
@@ -377,6 +381,7 @@ private:
     
     // Parse attributes
     while(parse_attrs(attrs));
+    if(errRow > -1) return false;
     
     // Check if void tag
     const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
@@ -408,7 +413,7 @@ private:
   // Attempts to parse "</TAG>" given "TAG"
   constexpr void parse_close_tag(const char_view &symExpected)
   {
-    if( errRow > -1) return;
+    if(errRow > -1) return;
     
     eat_space();
     
@@ -444,7 +449,7 @@ private:
   // Creates a node "@attr" under the given node and chains attributes under it if any
   constexpr void append_attrs(cnode &node, node_attrs &attrs)
   {
-    if( errRow > -1) return;
+    if(errRow > -1) return;
     
     // If there are any attributes, they become the first children of this node
     if(attrs.size())
@@ -471,7 +476,7 @@ private:
   // TAG :: OPENTAG HTML CLOSETAG
   constexpr int parse_tag()
   {
-    if( errRow > -1) return 0;
+    if(errRow > -1) return 0;
     
     // Parse the open tag, get its index
     int iCurrId = nodes.size();
