@@ -1,5 +1,6 @@
 #include <iostream>
 #include <type_traits>
+#include <chrono>
 #include "seephit.h"
 using namespace std;
 
@@ -8,14 +9,15 @@ using namespace std;
 int main()
 {
   constexpr auto parser = 
-    #include "test/trunc.spt"
+  #include "test/loop.spt"
     
   REPORT_ERRORS(parser);
     
   spt::tree spt_tree(parser);
-  spt::template_dict dct;
+  spt::template_dict dct = spt_tree.get_default_dict();
   spt_tree.root.render(cout, dct);
-  cerr << endl;
+
+  cout << endl;
 }
 
 

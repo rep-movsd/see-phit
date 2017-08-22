@@ -44,7 +44,7 @@ constexpr bool is_alpha(char ch)
 
 constexpr bool is_digit(char ch)
 {
-  return (ch >= '0' && ch <= '9'); 
+  return ch == '-' || (ch >= '0' && ch <= '9'); 
 }
 
 constexpr bool is_attr(char ch)
@@ -229,6 +229,27 @@ struct char_view
   {
     while(begin() < end() && is_space(front())) m_pBeg++;
     while(end() > begin() && is_space( back())) m_pEnd--;
+  }
+
+  // converts symbol to an integer (assuming trimmed)
+  constexpr int toInt() const
+  {
+    int ret = 0;
+    const char *p = begin();
+    
+    // Check if negative
+    bool bNeg = *p == '-';
+    if(bNeg) p++;
+    
+    // Gather the digits
+    for(; p != end(); ++p)
+    {
+      ret *= 10;
+      ret += *p - '0';
+    }
+    
+    // Return with sign
+    return bNeg ? ret : -ret;
   }
   
 };

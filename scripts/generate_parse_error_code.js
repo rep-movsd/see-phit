@@ -2,7 +2,6 @@ const errs = [
   'Expecting_an_identifier',
   'Unexpected_character_inside_tag_content',
   'Expecting_a_tag_name_after_open_bracket',
-  'Expecting_open_quote_for_attribute_value',
   'Empty_value_for_non_boolean_attribute',
   'Duplicate_ID_on_tag',
   'Expecting_a_value_for_attribute',
@@ -15,6 +14,9 @@ const errs = [
   'Missing_close_bracket_in_close_tag',
   'Missing_close_brace_in_template',
   'Unexpected_end_of_stream',
+  
+  'Invalid_syntax_in_for_tag',
+  'Infinite_loop_in_for_tag',
 ];
 
 function makeEnums(e) {return 'Error_' + e;}

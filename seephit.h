@@ -43,6 +43,9 @@ constexpr const char_view g_symID{"id"};
 constexpr const char_view g_symStyle{"style"};
 constexpr const char_view g_symPre{"pre"};
 
+// Control structures
+constexpr const char_view g_symFor{"for"};
+
 // These two tags are used internally to handle bare text and attributes
 constexpr const char_view g_symText{"@text"};
 constexpr const char_view g_symAttr{"@attr"};
@@ -151,8 +154,8 @@ private:
     while(*pszText && *pszText <= 32) { ++pszText; }
   }
   
-  // Consumes [a-z]+
-  template<typename F> constexpr const char_view eat_alpha(F isX)
+  // Consumes characters matched by isX
+  template<typename F> constexpr const char_view eat_only(F isX)
   {
     // Ensure not EOS
     check_eos();
@@ -270,21 +273,29 @@ private:
     if(is_alpha(*pszText))
     { 
       // Get the attr name
-      const char_view &name = eat_alpha(is_attr); 
+      const char_view &name = eat_only(is_attr); 
 
       bool bHasEqual = eat_str("=");
       
       if(bHasEqual)
       {
+        char_view value;
         // Check what delimiter is used " or ' 
         char chDelim = pszText[0];
-        if(chDelim != '"' && chDelim != '\'')
+        if(chDelim == '"' || chDelim == '\'')
         {
-          PARSE_ERR(Error_Expecting_open_quote_for_attribute_value);
+          // Eat the open delim
+          ++pszText;
+          value = eat_until(chDelim, nullptr);
+          
+          // Eat the close delim
+          pszText++;
         }
-        ++pszText;
-        
-        char_view value = eat_until(chDelim, nullptr);
+        else // no delimiter, stop at space
+        {
+          value = eat_only(is_attrval);
+          eat_space();
+        }                
         
         if(value.empty())
         {
@@ -293,9 +304,6 @@ private:
         
         check_eos();
         ON_ERR_RETURN false;
-
-        // Eat the close delim
-        pszText++;
         
         
         // Swallow any space
@@ -320,7 +328,7 @@ private:
         else
         {
           attrs.push_back(attr(name, value));
-          //DUMP << "Parsed attr " << name << "=" << value << ENDL;
+          DUMP << "Parsed attr " << name << "=" << value << ENDL;
         }
         
       }
@@ -339,6 +347,27 @@ private:
     } 
     
     return false;
+  }
+  
+  // verifies a for tag 
+  // <for var=N to=N [inc=N]> ...
+  constexpr void check_for_tag(node_attrs &attrs)
+  {
+    // The three atrributes have to be in order (inc is optional)
+    int nAttr = attrs.size(); 
+    if(nAttr < 2 || attrs[1].name != "to" || (nAttr == 3 && attrs[2].name != "inc"))
+    {
+      PARSE_ERR(Error_Invalid_syntax_in_for_tag);
+    }
+    
+    // Verify that the for loop params are sane
+    int iBeg = attrs[0].value.toInt();
+    int iEnd = attrs[1].value.toInt();
+    int iInc = nAttr == 3 ? attrs[2].value.toInt() : 1;
+    if((iBeg > iEnd && iInc >= 0) || (iBeg < iEnd && iInc <= 0) || iBeg == iEnd)
+    {
+      PARSE_ERR(Error_Infinite_loop_in_for_tag);
+    }
   }
   
   // Parse "<TAG>", ignores leading whitespace
@@ -360,7 +389,7 @@ private:
     
     // Try to parse an [a-z0-9]+ as a tag - 
     // is_open_tag would have already ensure first char is [a-z]
-    char_view sym = eat_alpha(is_alnum);
+    char_view sym = eat_only(is_alnum);
 
     DUMP << "Parsed open tag: " << sym << ENDL;
     
@@ -386,6 +415,12 @@ private:
     while(parse_attrs(attrs));
     ON_ERR_RETURN false;
     
+    // Check if its a for node and verify
+    if(node.tag == g_symFor)
+    {
+      check_for_tag(attrs);
+    }
+        
     // Check if void tag
     const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
     bool bIsVoidTag = find_arr(arrVoidTags, nVoidTags, node.tag.m_pBeg) != -1;
@@ -427,7 +462,7 @@ private:
     }
     
     // Try to parse the tag name
-    char_view sym = eat_alpha(is_alnum);
+    char_view sym = eat_only(is_alnum);
     if(sym != symExpected) 
     {
       DUMP << "Expected '" << symExpected << "' got '" << sym << "'" << ENDL;
@@ -773,6 +808,17 @@ struct tree
     build(parser, root, templates, 0);
   }
   
+  // Test function that returns a map of all the keys with value == key
+  template_dict get_default_dict()
+  {
+    template_dict ret;
+    for(const auto &i: templates)
+    {
+      ret[i.first] = i.first;
+    }
+    return ret;
+  }
+    
   // Recursively builds the runtime tree structure from the compile time parser
   // Detects strings of the form {{key}} inside node content and adds it to a template_dict
   static void build(const parser &parser, rnode &parent, template_dict &dctTemplates, int index)
