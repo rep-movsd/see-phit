@@ -13,6 +13,7 @@ const errs = [
   'Expecting_a_close_tag',
   'Mismatched_Close_Tag',
   'Missing_close_bracket_in_close_tag',
+  'Missing_close_brace_in_template',
 ];
 
 function makeEnums(e) {return 'Error_' + e;}

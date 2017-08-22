@@ -506,17 +506,45 @@ private:
     check_eos();
     bool contentUnexpectedChars[256] = {false};
     contentUnexpectedChars[int('>')] = true;
-    //contentUnexpectedChars[int('&')] = true;
     auto text = eat_until('<', contentUnexpectedChars);
+    
+    // Make sure we have something left
+    check_eos();
+        
+    // check if we have a '{{'
+    int nBrace = 0;
+    auto p = text.begin();
+    
+    while(p != text.end())
+    {
+      if(p[0] == '{' && p[1] == '{')
+      {
+        ++nBrace;
+      }
+      else
+      {
+        if(nBrace)
+        {
+          if(p[0] == '}' && p[1] == '}')
+          {
+            --nBrace;
+          }
+        }
+      }
+      
+      ++p;
+    }
+    
+    if(nBrace)
+    {
+      PARSE_ERR(Error_Missing_close_brace_in_template);
+    }
     
     // Trim whitespace if needed
     if(bTrim)     
     { 
       text.trim();
     }
-    
-    // Make sure we have something left
-    check_eos();
     
     // Add a text meta node and return its index
     nodes.push_back(cnode(g_symText, text));
