@@ -11,7 +11,7 @@ const int VOID_TAG = -2;
 
  
 // Map of template names to values
-using template_dict = map<string, string>;
+using template_dict = unordered_map<string, string>;
 
 // Basic constexpr functions for text processing
 constexpr char to_upper(char ch)

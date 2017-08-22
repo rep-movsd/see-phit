@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cassert>
 #include <iostream>
-#include <map>
+#include <unordered_map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -13,7 +13,7 @@
 using std::string;
 using std::vector;
 using std::pair;
-using std::map;
+using std::unordered_map;
 
 using std::ostream;
 using std::cerr;
@@ -33,13 +33,10 @@ using std::endl;
 namespace spt
 {
 
- 
 using attrs = vec<attr, SPT_MAX_ATTRS>;
 using cnodes = vec<cnode, SPT_MAX_NODES>;
 using node_attrs = vec<attr, SPT_MAX_ATTR_PER_NODE>;
 using warnings = vec<Message, SPT_MAX_WARNINGS>;
-
-
 
 // Hardcoded symbols to detect id and style
 constexpr const char_view g_symID{"id"};
@@ -49,8 +46,6 @@ constexpr const char_view g_symPre{"pre"};
 // These two tags are used internally to handle bare text and attributes
 constexpr const char_view g_symText{"@text"};
 constexpr const char_view g_symAttr{"@attr"};
-
-
 
 // Compile time parser
 struct parser
@@ -62,8 +57,7 @@ struct parser
   
   int errRow = -1;
   int errCol = -1;
-  
-  
+    
   constexpr explicit parser(const char *pszText): pszText(pszText), pszStart(pszText) {}
 
   // Parse grammar
@@ -588,7 +582,7 @@ class rnode
 {
   friend struct tree;
   
-  using attr_dict = map<string, string>; 
+  using attr_dict = unordered_map<string, string>; 
   
   // children if any
   vector<rnode> children;
