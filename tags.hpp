@@ -182,7 +182,16 @@ constexpr const char *g_arrTags[] =
 
 constexpr const char *g_arrCtrlTags[] = 
 {
-  "for"
+  // runtime loop <for var='1' to='10' inc='1'>
+  // inc is optional, defaults to 1
+  "for", 
+  
+  // runtime if  <if cond=val> <div> Stuff rendered if cond is non-zero </div> </if> 
+  "if",
+  
+  // meta node used as an outermost wrapper, not rendered
+  "root"
+  
 };
 
 

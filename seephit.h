@@ -45,6 +45,8 @@ constexpr const char_view g_symPre{"pre"};
 
 // Control structures
 constexpr const char_view g_symFor{"for"};
+constexpr const char_view g_symIf{"if"};
+constexpr const char_view g_symRoot{"root"};
 
 // These two tags are used internally to handle bare text and attributes
 constexpr const char_view g_symText{"@text"};
@@ -106,7 +108,6 @@ private:
   // Macro to execute a block of code, saving and restoring the a value across it
   #define WITH_SAVE_POS for(saver s(pszText); s.done; pszText = s.finish())
  
-
   const char *pszText = nullptr;  // Position in the stream
   const char *pszStart = nullptr;
   
@@ -197,8 +198,7 @@ private:
     
     return true;
   }
-  
-  
+ 
   // Consume stuff until ch is encountered
   constexpr const char_view eat_until(char ch, const bool *unExpected)
   {
@@ -288,6 +288,9 @@ private:
           ++pszText;
           value = eat_until(chDelim, nullptr);
           
+          check_eos();
+          ON_ERR_RETURN false;
+          
           // Eat the close delim
           pszText++;
         }
@@ -345,6 +348,17 @@ private:
     } 
     
     return false;
+  }
+  
+  // verifies an if tag 
+  // <if cond={{var}}> <div> Stuff rendered if cond is non-zero </div> </if>  
+  constexpr void check_if_tag(node_attrs &attrs)
+  {
+    int nAttr = attrs.size(); 
+    if(nAttr < 1 || attrs[0].name != "cond")
+    {
+      PARSE_ERR(Error_Invalid_syntax_in_if_tag);
+    }
   }
   
   // verifies a for tag 
@@ -415,10 +429,14 @@ private:
     while(parse_attrs(attrs));
     ON_ERR_RETURN false;
     
-    // Check if its a for node and verify
+    // Check for control nodes, if and for, verify if they have the required attrs
     if(node.tag == g_symFor)
     {
       check_for_tag(attrs);
+    }
+    else if(node.tag == g_symIf)
+    {
+      check_if_tag(attrs);
     }
         
     // Check if void tag
@@ -632,7 +650,6 @@ private:
         {
           // Walk down the sibling chain to get the last child
           int iYoungest = nodes[iParentId].child;
-          
           while(nodes[iYoungest].sibling != -1)
           {
             iYoungest = nodes[iYoungest].sibling;
@@ -653,7 +670,6 @@ private:
     
     return false;
   }
-  
 };
 
 // Runtime tree node

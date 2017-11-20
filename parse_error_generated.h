@@ -21,6 +21,7 @@ enum Messages
   Error_Missing_close_brace_in_template,
   Error_Unexpected_end_of_stream,
   Error_Invalid_syntax_in_for_tag,
+  Error_Invalid_syntax_in_if_tag,
   Error_Infinite_loop_in_for_tag
 };
 
@@ -41,6 +42,7 @@ struct Missing_close_bracket_in_close_tag {};
 struct Missing_close_brace_in_template {};
 struct Unexpected_end_of_stream {};
 struct Invalid_syntax_in_for_tag {};
+struct Invalid_syntax_in_if_tag {};
 struct Infinite_loop_in_for_tag {};
 
 template<Messages m> struct MsgToType{};
@@ -62,6 +64,7 @@ template<> struct MsgToType<Error_Missing_close_bracket_in_close_tag>{using type
 template<> struct MsgToType<Error_Missing_close_brace_in_template>{using type = Missing_close_brace_in_template;}; 
 template<> struct MsgToType<Error_Unexpected_end_of_stream>{using type = Unexpected_end_of_stream;}; 
 template<> struct MsgToType<Error_Invalid_syntax_in_for_tag>{using type = Invalid_syntax_in_for_tag;}; 
+template<> struct MsgToType<Error_Invalid_syntax_in_if_tag>{using type = Invalid_syntax_in_if_tag;}; 
 template<> struct MsgToType<Error_Infinite_loop_in_for_tag>{using type = Infinite_loop_in_for_tag;}; 
 
 #ifndef SPT_DEBUG
@@ -86,6 +89,7 @@ if((x) < n)                                                      \
   spt::IF<w.m == spt::Error_Missing_close_brace_in_template, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
   spt::IF<w.m == spt::Error_Unexpected_end_of_stream, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
   spt::IF<w.m == spt::Error_Invalid_syntax_in_for_tag, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
+  spt::IF<w.m == spt::Error_Invalid_syntax_in_if_tag, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
   spt::IF<w.m == spt::Error_Infinite_loop_in_for_tag, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
 }
 

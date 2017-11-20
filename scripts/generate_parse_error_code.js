@@ -14,8 +14,8 @@ const errs = [
   'Missing_close_bracket_in_close_tag',
   'Missing_close_brace_in_template',
   'Unexpected_end_of_stream',
-  
   'Invalid_syntax_in_for_tag',
+  'Invalid_syntax_in_if_tag',
   'Infinite_loop_in_for_tag',
 ];
 
@@ -25,10 +25,8 @@ const enums = errs.map(makeEnums).join(',\n  ');
 function makeStruct(e) {return 'struct ' + e + ' {};';}
 const structs = errs.map(makeStruct).join('\n');
 
-
 function makeMsgToType(e) {return `template<> struct MsgToType<Error_${e}>{using type = ${e};}; `}
 const MsgToType = errs.map(makeMsgToType).join('\n');
-
 
 function makeWarner(e) {return `spt::IF<w.m == spt::${'Error_' + e}, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \\`}
 const warners = errs.map(makeWarner).join('\n  ');
