@@ -1,7 +1,7 @@
 R"*(
 <for n=1 to=10 inc=1 >
   <div>
-  item%n%
+  item{{n}}
   </div>
 </for>
 )*"_html; 

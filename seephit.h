@@ -305,10 +305,8 @@ private:
         check_eos();
         ON_ERR_RETURN false;
         
-        
         // Swallow any space
         eat_space();
-                
         
         // Is it an ID tag
         if(name == g_symID)
@@ -334,8 +332,8 @@ private:
       }
       else
       {
-        const int nAttrs = sizeof(arrBoolAttrs)/sizeof(arrBoolAttrs[0]);
-        if(find_arr(arrBoolAttrs, nAttrs, name.m_pBeg) == -1)
+        const int nAttrs = sizeof(g_arrBoolAttrs)/sizeof(g_arrBoolAttrs[0]);
+        if(find_arr(g_arrBoolAttrs, nAttrs, name.m_pBeg) == -1)
         {
           PARSE_ERR(Error_Expecting_a_value_for_attribute);
         }
@@ -401,8 +399,10 @@ private:
     eat_space();
     
     // Check if valid tag
-    const int nTags = sizeof(arrTags)/sizeof(arrTags[0]);
-    if(find_arr(arrTags, nTags, sym.m_pBeg) == -1)
+    const int nTags = sizeof(g_arrTags)/sizeof(g_arrTags[0]);
+    const int nCtrlTags = sizeof(g_arrCtrlTags)/sizeof(g_arrCtrlTags[0]);
+    
+    if(find_arr(g_arrCtrlTags, nCtrlTags, sym.m_pBeg) == -1 && find_arr(g_arrTags, nTags, sym.m_pBeg) == -1)
     {
       WITH_SAVE_POS
       {
@@ -411,7 +411,7 @@ private:
       }
     }
     
-    // Parse attributes
+    // Parse all attributes
     while(parse_attrs(attrs));
     ON_ERR_RETURN false;
     

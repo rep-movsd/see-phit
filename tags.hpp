@@ -18,7 +18,7 @@ constexpr const char* arrVoidTags[] =
   "source"
 };
 
-constexpr const char *arrBoolAttrs[] = 
+constexpr const char *g_arrBoolAttrs[] = 
 {
   "checked",
   "compact",
@@ -34,7 +34,7 @@ constexpr const char *arrBoolAttrs[] =
   "selected",
 };
 
-constexpr const char *arrTags[] = 
+constexpr const char *g_arrTags[] = 
 {
   "a",
   "abbr",
@@ -179,5 +179,11 @@ constexpr const char *arrTags[] =
   "wbr",
   "xmp",
 };
+
+constexpr const char *g_arrCtrlTags[] = 
+{
+  "for"
+};
+
 
 #endif
