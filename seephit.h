@@ -63,6 +63,10 @@ struct parser
   int errRow = -1;
   int errCol = -1;
   
+  // Index of the first parentless top level node
+  // We need this to chain the top level parentless siblings together 
+  int iElder = -1;
+  
   // Macro to quit the current function if error
   #define ON_ERR_RETURN if(errRow > -1) return
     
@@ -664,6 +668,18 @@ private:
           nodes[iParentId].child = iChild;
         }
       }
+      else // This is a top level node with no parent
+      {
+        // Do we know of an elder?
+        if(iElder > -1)
+        {
+          // Set us to be the sibling of that elder
+          nodes[iElder].sibling = iChild;
+        }
+        
+        // We are the youngest elder
+        iElder = iChild;
+      }
       
       return true;
     }
@@ -754,37 +770,58 @@ public:
   
   void render(ostream &ostr, const template_dict &dctTemplates, int indent = 0) const
   {
-    string sIndent = string(indent * 2, ' ');
+    string sIndent(indent * 2, ' ');
+    string sTag{tag.m_pBeg, tag.m_pEnd};
+
+    bool bCtrlNode = false;
     bool bTextNode = tag == g_symText;
     
-    if(!bTextNode)
+    // Check if the tag is a control tag
+    for(const char *p: g_arrCtrlTags)
     {
-      ostr << sIndent << "<" << tag;
-      
-      if(!id.empty())
+      if(p == sTag)
       {
-        ostr << " ID" << "='" << id << '\'';
-      }
-      
-      for(const auto &attr: attrs)
-      {
-        ostr << ' ' << attr.first << '=' << '\'' << attr.second << '\'';
-      }
-      
-      ostr << ">";
-      
-      if(!children.empty()) 
-      {
-        ostr << "\n";
-      }
-      
-      for(const auto& child: children)
-      {
-        child.render(ostr, dctTemplates, indent + 1);
+        bCtrlNode = true;
+        break;
       }
     }
     
-    // Skip text and close tag for void tags
+    // For non text nodes we render tags
+    if(!bTextNode)
+    {
+      // Ignore tag for control nodes
+      if(!bCtrlNode)
+      {
+        // Render the open tag, and the ID if any
+        ostr << sIndent << "<" << tag;
+        
+        if(!id.empty())
+        {
+          ostr << " ID" << "='" << id << '\'';
+        }
+        
+        // Render the attributes and close the >
+        for(const auto &attr: attrs)
+        {
+          ostr << ' ' << attr.first << '=' << '\'' << attr.second << '\'';
+        }
+        ostr << ">";
+        
+        // If taag has children add a newline
+        if(!children.empty()) 
+        {
+          ostr << "\n";
+        }
+      }
+      
+      // Render children if any, don't indent for control tags
+      for(const auto& child: children)
+      {
+        child.render(ostr, dctTemplates, indent + (bCtrlNode ? 0 : 1));
+      }
+    }
+    
+    // Skip text and close tag for void tags and control tags
     if(!bVoid)
     {
       if(!templates.parts().empty())
@@ -794,7 +831,7 @@ public:
         ostr << "\n";
       }
       
-      if(!bTextNode)
+      if(!bTextNode && !bCtrlNode)
       {  
         ostr << sIndent << "</" << tag << ">" << "\n";
       }
@@ -819,7 +856,7 @@ struct tree
   
   // Takes the compile time parser data and constructs thr runtime node tree 
   // Also generates a map for templates 
-  tree(const parser &parser): root("HTML", "", false, -1, templates)
+  tree(const parser &parser): root("root", "", false, -1, templates)
   {
     build(parser, root, templates, 0);
   }
