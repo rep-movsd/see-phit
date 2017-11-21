@@ -72,7 +72,7 @@ template<> struct MsgToType<Error_Infinite_loop_in_for_tag>{using type = Infinit
 #define DUMP_WARNING(x)                                        \
 if((x) < n)                                                      \
 {                                                              \
-  constexpr auto w = parser.warns[(x)];                          \
+  constexpr auto w = parser.m_arrWarns[(x)];                          \
   spt::IF<w.m == spt::Error_Expecting_an_identifier, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
   spt::IF<w.m == spt::Error_Unexpected_character_inside_tag_content, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
   spt::IF<w.m == spt::Error_Expecting_a_tag_name_after_open_bracket, spt::Warning<w.row, w.col, spt::MsgToType<w.m>::type>> ();  \
@@ -94,7 +94,7 @@ if((x) < n)                                                      \
 }
 
 #define REPORT_ERRORS(parser)          \
-constexpr int n = parser.warns.size();          \
+constexpr int n = parser.m_arrWarns.size();          \
 DUMP_WARNING(0);                       \
 DUMP_WARNING(1);                       \
 DUMP_WARNING(2);                       \
@@ -115,8 +115,8 @@ DUMP_WARNING(16);                       \
 DUMP_WARNING(17);                       \
 DUMP_WARNING(18);                       \
 DUMP_WARNING(19);                       \
-constexpr bool hasErr = parser.errRow > -1 || parser.errCol > -1; \
-spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> {};
+constexpr bool hasErr = parser.m_iErrRow > -1 || parser.m_iErrCol > -1; \
+spt::IF<hasErr, spt::Error<parser.m_iErrRow, parser.m_iErrCol, spt::MsgToType<parser.m_arrErrs>::type>> {};
 
 #else
 

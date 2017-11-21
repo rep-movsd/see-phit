@@ -55,22 +55,22 @@ constexpr const char_view g_symAttr{"@attr"};
 // Compile time parser
 struct parser
 {
-  cnodes nodes;
-  sym_tab ids;
-  warnings warns;
-  Messages err {};
+  cnodes m_arrNodes;
+  sym_tab m_ids;
+  warnings m_arrWarns;
+  Messages m_arrErrs {};
   
-  int errRow = -1;
-  int errCol = -1;
+  int m_iErrRow = -1;
+  int m_iErrCol = -1;
   
   // Index of the first parentless top level node
   // We need this to chain the top level parentless siblings together 
-  int iElder = -1;
+  int m_iElder = -1;
   
   // Macro to quit the current function if error
-  #define ON_ERR_RETURN if(errRow > -1) return
+  #define ON_ERR_RETURN if(m_iErrRow > -1) return
     
-  constexpr explicit parser(const char *pszText): pszText(pszText), pszStart(pszText) {}
+  constexpr explicit parser(const char *pszText): m_pszText(pszText), m_pszStart(pszText) {}
 
   // Parse grammar
   // HTML     :: CONTENT | CONTENT HTML
@@ -82,13 +82,14 @@ struct parser
   // symEndTag represents the point at which the parsing should stop
   constexpr void parse_html(int iParentId)
   {
-    while(errRow == -1 && parse_content(iParentId));
+    while(m_iErrRow == -1 && parse_content(iParentId));
   }
       
+  // Dumps the tree nodes linearly
   void dump() const 
   {
     int i = 0;
-    for(const auto &node: nodes)
+    for(const auto &node: m_arrNodes )
     {
       cerr << "n=" << i++ << ",";
       node.dump();
@@ -99,8 +100,6 @@ struct parser
 private:
 
   // Helper for error handling construct
-  // Use as follows:
-  // WITH_SAVE_POS { ... }
   struct saver
   {
     const char *saved = nullptr;
@@ -110,45 +109,38 @@ private:
   };
   
   // Macro to execute a block of code, saving and restoring the a value across it
-  #define WITH_SAVE_POS for(saver s(pszText); s.done; pszText = s.finish())
- 
-  const char *pszText = nullptr;  // Position in the stream
-  const char *pszStart = nullptr;
+  // Use as follows: WITH_SAVE_POS { ... }
+  #define WITH_SAVE_POS for(saver s(m_pszText); s.done; m_pszText = s.finish())
+  #define INDEX_OF(ELEM, ARR) find_arr(ARR, (sizeof(ARR) / sizeof(ARR[0])), ELEM) 
   
-  // Return line number of current poistion
+  const char *m_pszText = nullptr;  // Position in the stream
+  const char *m_pszStart = nullptr;
+  
+  // Return line number of current position
   constexpr int cur_row() const
   {
-    // Count the number of \n
+    // Count the number of newlines
     int n = 0;
-    auto p = pszStart;
-    while(p != pszText)
+    for(auto p = m_pszStart; p != m_pszText; ++p)
     {
-      if(*p++ == '\n') ++n;
+      if(*p == '\n') ++n;
     }
     return n + 1;
   }
   
-  // Return column number of current poistion
+  // Return column number of current position
   constexpr int cur_col() const
   {
     // Count the number of chars to reach \n or beginning
     int n = 0;
-    auto p = pszText;
-    while(p != pszStart && *p-- != '\n')
-    {
-      ++n;
-    }
+    for(auto p = m_pszText; p != m_pszStart && *p-- != '\n'; ++n);
     return n;
   }
   
   // Raises compiletime error if no more characters left to parse
   constexpr void check_eos()
   {
-    bool eos = *pszText == 0;
-    if(eos) 
-    {
-      PARSE_ERR(Error_Unexpected_end_of_stream);
-    }
+    if(*m_pszText == 0) PARSE_ERR(Error_Unexpected_end_of_stream);
   }
   
   // Advances to first non-whitespace character
@@ -156,7 +148,7 @@ private:
   constexpr void eat_space()
   {
     check_eos();
-    while(*pszText && *pszText <= 32) { ++pszText; }
+    while(*m_pszText && *m_pszText <= 32) ++m_pszText;
   }
   
   // Consumes characters matched by isX
@@ -165,16 +157,17 @@ private:
     // Ensure not EOS
     check_eos();
     
-    char_view sym(pszText, pszText);
-    while(isX(*sym.m_pEnd)) { sym.m_pEnd++;}
+    // Create a symbol starting here
+    char_view sym{m_pszText, m_pszText};
+    
+    // Keep accumulating chars into the symbol until test fails
+    while(isX(*sym.m_pEnd)) sym.m_pEnd++;
     
     // Ensure at least 1 character is consumed
-    if(sym.empty()) 
-    {
-      PARSE_ERR(Error_Expecting_an_identifier);
-    }
+    if(sym.empty()) PARSE_ERR(Error_Expecting_an_identifier);
     
-    pszText = sym.m_pEnd;
+    // Move current pos to end of symbol
+    m_pszText = sym.m_pEnd;
     return sym;
   }
   
@@ -185,35 +178,32 @@ private:
     while(*pszSym)
     {
       // Any mismatch is a parse error
-      if(*pszSym != *pszText) 
-      {
-        return false;
-      }
+      if(*pszSym != *m_pszText ) return false;
       
       ++pszSym;
-      ++pszText;
+      ++m_pszText;
       
       // Ensure we are not at end of stream before the symbol has been compared fully
-      if(*pszSym)
-      {
-        check_eos();
-      }
+      if(*pszSym) check_eos();
     }
     
     return true;
   }
  
   // Consume stuff until ch is encountered
-  constexpr const char_view eat_until(char ch, const bool *unExpected)
+  constexpr const char_view eat_until(char chDelim, const bool *unExpected)
   {
-    char_view sym(pszText, pszText);
-    while(*sym.m_pEnd && *sym.m_pEnd != ch) 
+    char_view sym( m_pszText, m_pszText );
+    
+    // Keep iterating until we hit the end of the symbol or the delimiting char
+    while(*sym.m_pEnd && *sym.m_pEnd != chDelim ) 
     {
+      // If we hit an unexpected char, throw an error
       if(unExpected && unExpected[static_cast<unsigned char>(*sym.m_pEnd)])
       {
-        for(saver s(pszText); s.done; pszText = s.finish())
+        WITH_SAVE_POS
         {
-          pszText = sym.m_pEnd;
+          m_pszText = sym.m_pEnd;
           PARSE_ERR(Error_Unexpected_character_inside_tag_content);
         }
         break;
@@ -221,35 +211,39 @@ private:
       sym.m_pEnd++;
     }
     
-    pszText = sym.m_pEnd;
+    // Point current pos at end of symbol
+    m_pszText = sym.m_pEnd;
     return sym;
   }
   
-  // Checks if we have an open tag at p
+  // Checks if we have an open tag
   constexpr bool is_open_tag()
   {
-    auto saved = pszText;
+    auto saved = m_pszText;
     eat_space();
-    if(pszText[0] == '<')
+    
+    // Look for open tag and an alphanumeric character
+    if( m_pszText[0] == '<')
     {
-      if(is_alpha(pszText[1])) 
+      if(is_alpha(m_pszText[1])) 
       {
-        pszText = saved;
+        m_pszText = saved;
         return true;
       }
       
-      if(pszText[1] != '/') 
+      // If its not an open tag, it has to be a close tag, else its invalid
+      if(m_pszText[1] != '/') 
       {
-        pszText++;
+        m_pszText++;
         PARSE_ERR(Error_Expecting_a_tag_name_after_open_bracket);
       }
     }
     
-    pszText = saved;
+    m_pszText = saved;
     return false;
   }
   
-  // Checks if we have a close tag at state.text, returns the tag symbol
+  // Checks if we have a close tag, returns the tag symbol
   constexpr bool is_close_tag()
   {
     // Save the pointer, eat whitespace
@@ -257,9 +251,10 @@ private:
     {
       eat_space();
       
-      if(pszText[0] == '<' && pszText[1] == '/')
+      // Check for "</" followed by alpha
+      if(m_pszText[0] == '<' && m_pszText[1] == '/')
       {
-        return is_alpha(pszText[2]);
+        return is_alpha(m_pszText[2]);
       }
     }
     return false;
@@ -274,29 +269,28 @@ private:
     // Swallow any space
     eat_space();
     
-    if(is_alpha(*pszText))
+    if(is_alpha(*m_pszText ))
     { 
       // Get the attr name
       const char_view &name = eat_only(is_attr); 
 
       bool bHasEqual = eat_str("=");
-      
       if(bHasEqual)
       {
         char_view value;
         // Check what delimiter is used " or ' 
-        char chDelim = pszText[0];
+        char chDelim = m_pszText[0];
         if(chDelim == '"' || chDelim == '\'')
         {
           // Eat the open delim
-          ++pszText;
+          ++m_pszText;
           value = eat_until(chDelim, nullptr);
           
           check_eos();
           ON_ERR_RETURN false;
           
           // Eat the close delim
-          pszText++;
+          m_pszText++;
         }
         else // no delimiter, stop at space
         {
@@ -304,10 +298,7 @@ private:
           eat_space();
         }                
         
-        if(value.empty())
-        {
-          PARSE_ERR(Error_Empty_value_for_non_boolean_attribute);
-        }
+        if(value.empty()) PARSE_ERR(Error_Empty_value_for_non_boolean_attribute);
         
         check_eos();
         ON_ERR_RETURN false;
@@ -318,33 +309,34 @@ private:
         // Is it an ID tag
         if(name == g_symID)
         {
-          if(!ids.addSym(value))
+          // Verify that the ID has not been used before
+          if(!m_ids.addSym(value))
           {
             // Save the pointer, point it to the start of symbol, for the warning
             WITH_SAVE_POS
             {
-              pszText = value.begin();
+              m_pszText = value.begin();
               PARSE_WARN(Error_Duplicate_ID_on_tag);
             }
           }
           
-          nodes.back().id = value;
+          // Add the ID to the array of IDs
+          m_arrNodes.back().id = value;
         }
-        else
+        else // Regular attribute, accumulate it
         {
           attrs.push_back(attr(name, value));
           DUMP << "Parsed attr " << name << "=" << value << ENDL;
         }
-        
       }
-      else
+      else // No equal sign - test for boolean attributes
       {
-        const int nAttrs = sizeof(g_arrBoolAttrs)/sizeof(g_arrBoolAttrs[0]);
-        if(find_arr(g_arrBoolAttrs, nAttrs, name.m_pBeg) == -1)
+        if(INDEX_OF(name.m_pBeg, g_arrBoolAttrs) == -1)
         {
           PARSE_ERR(Error_Expecting_a_value_for_attribute);
         }
         
+        // Add the attribute to the list
         attrs.push_back(attr(name, name));
       }
       
@@ -398,10 +390,7 @@ private:
     check_eos();
     
     // Try to parse the "<"
-    if(!eat_str("<")) 
-    {
-      PARSE_ERR(Error_Missing_open_bracket);
-    }
+    if(!eat_str("<")) PARSE_ERR(Error_Missing_open_bracket);
     
     // Try to parse an [a-z0-9]+ as a tag - 
     // is_open_tag would have already ensure first char is [a-z]
@@ -410,21 +399,18 @@ private:
     DUMP << "Parsed open tag: " << sym << ENDL;
     
     // add a node 
-    nodes.push_back(cnode(sym));
-    cnode &node = nodes.back();
+    m_arrNodes.push_back(cnode(sym));
+    cnode &node = m_arrNodes.back();
     
     // Eat any trailing whitespace
     eat_space();
     
     // Check if valid tag
-    const int nTags = sizeof(g_arrTags)/sizeof(g_arrTags[0]);
-    const int nCtrlTags = sizeof(g_arrCtrlTags)/sizeof(g_arrCtrlTags[0]);
-    
-    if(find_arr(g_arrCtrlTags, nCtrlTags, sym.m_pBeg) == -1 && find_arr(g_arrTags, nTags, sym.m_pBeg) == -1)
+    if(INDEX_OF(sym.m_pBeg, g_arrCtrlTags) == -1 && INDEX_OF(sym.m_pBeg, g_arrTags) == -1)
     {
       WITH_SAVE_POS
       {
-        pszText = sym.m_pBeg;
+        m_pszText = sym.m_pBeg;
         PARSE_WARN(Error_Unknown_tag_name);
       }
     }
@@ -444,9 +430,7 @@ private:
     }
         
     // Check if void tag
-    const int nVoidTags = sizeof(arrVoidTags)/sizeof(arrVoidTags[0]);
-    bool bIsVoidTag = find_arr(arrVoidTags, nVoidTags, node.tag.m_pBeg) != -1;
-    
+    bool bIsVoidTag = INDEX_OF(node.tag.m_pBeg, arrVoidTags) != -1;
     if(bIsVoidTag)
     {
       // Void tag, optionally eat the "/" too
@@ -474,7 +458,6 @@ private:
   constexpr void parse_close_tag(const char_view &symExpected)
   {
     ON_ERR_RETURN;
-    
     eat_space();
     
     // Try to parse the "</"
@@ -490,7 +473,7 @@ private:
       DUMP << "Expected '" << symExpected << "' got '" << sym << "'" << ENDL;
       WITH_SAVE_POS
       {
-        pszText = sym.begin();
+        m_pszText = sym.begin();
         PARSE_ERR(Error_Mismatched_Close_Tag);
       }
     }
@@ -515,20 +498,20 @@ private:
     if(attrs.size())
     {
       // Create a "attr" node, make it the child of this
-      nodes.push_back(cnode(g_symAttr));
-      cnode &nodeAttrs = nodes.back();
-      node.child = nodes.size() - 1;
+      m_arrNodes.push_back(cnode(g_symAttr));
+      cnode &nodeAttrs = m_arrNodes.back();
+      node.child = m_arrNodes.size() - 1;
       
       // Add the first attribute as the child of the "attr" node
-      nodes.push_back(cnode(attrs[0].name, attrs[0].value));
-      int iYoungest = nodeAttrs.child = nodes.size() - 1;
+      m_arrNodes.push_back(cnode(attrs[0].name, attrs[0].value));
+      int iYoungest = nodeAttrs.child = m_arrNodes.size() - 1;
       
       // Add the rest by chaining as siblings
       for(size_t i = 1; i < attrs.size(); ++i)
       {
-        nodes.push_back(cnode(attrs[i].name, attrs[i].value));
-        nodes[iYoungest].sibling = nodes.size() - 1;
-        iYoungest = nodes.size() - 1;
+        m_arrNodes.push_back(cnode(attrs[i].name, attrs[i].value));
+        m_arrNodes[iYoungest].sibling = m_arrNodes.size() - 1;
+        iYoungest = m_arrNodes.size() - 1;
       }
     }
   }
@@ -539,11 +522,11 @@ private:
     ON_ERR_RETURN 0;
     
     // Parse the open tag, get its index
-    int iCurrId = nodes.size();
+    int iCurrId = m_arrNodes.size();
     
     node_attrs attrs;
     bool bIsVoidTag = parse_open_tag(attrs);
-    cnode &node = nodes[iCurrId];
+    cnode &node = m_arrNodes[iCurrId];
     append_attrs(node, attrs);
     
     if(!bIsVoidTag)
@@ -564,18 +547,19 @@ private:
   
   constexpr void check_template_braces(const char_view &text)
   {
-    // check if we have a '{{'
     int nBrace = 0;
     auto p = text.begin();
     
     while(p != text.end())
     {
+      // Check for {{
       if(p[0] == '{' && p[1] == '{')
       {
         ++nBrace;
       }
       else
       {
+        // If we had one before check for a }}
         if(nBrace)
         {
           if(p[0] == '}' && p[1] == '}')
@@ -588,6 +572,7 @@ private:
       ++p;
     }
     
+    // If the counts mismatch, raise error
     if(nBrace)
     {
       PARSE_ERR(Error_Missing_close_brace_in_template);
@@ -612,15 +597,11 @@ private:
     check_template_braces(text);
     
     // Trim whitespace if needed
-    if(bTrim)     
-    { 
-      text.trim();
-    }
-    
+    if(bTrim) text.trim();
+   
     // Add a text meta node and return its index
-    nodes.push_back(cnode(g_symText, text));
-    
-    return nodes.size() - 1;
+    m_arrNodes.push_back(cnode(g_symText, text));
+    return m_arrNodes.size() - 1;
   }
   
   // CONTENT  :: TEXT | TAG
@@ -628,7 +609,7 @@ private:
   {
     // If we are out of text, were done
     // Else if we found a close tag, were done
-    if(*pszText && !is_close_tag() && errRow == -1)
+    if(*m_pszText && !is_close_tag() && m_iErrRow == -1)
     {
       // Parse either an open tag or text, get the new child nodes ID
       int iChild = -1;
@@ -642,7 +623,7 @@ private:
       else
       {
         // Trim the text unless the parent node is a <pre>
-        iChild = parse_text(nodes[iParentId].tag != g_symPre);
+        iChild = parse_text(m_arrNodes[iParentId].tag != g_symPre);
       }
       ON_ERR_RETURN false;
       
@@ -650,35 +631,35 @@ private:
       if(iParentId >= 0)
       {
         // Does parent have a child?
-        if(nodes[iParentId].child != -1)
+        if(m_arrNodes[iParentId].child != -1)
         {
           // Walk down the sibling chain to get the last child
-          int iYoungest = nodes[iParentId].child;
-          while(nodes[iYoungest].sibling != -1)
+          int iYoungest = m_arrNodes[iParentId].child;
+          while(m_arrNodes[iYoungest].sibling != -1)
           {
-            iYoungest = nodes[iYoungest].sibling;
+            iYoungest = m_arrNodes[iYoungest].sibling;
           }
           
           // Assign us as the last sibling 
-          nodes[iYoungest].sibling = iChild;
+          m_arrNodes[iYoungest].sibling = iChild;
         }
         else 
         {
           // Assign the parents "firstborn" to us
-          nodes[iParentId].child = iChild;
+          m_arrNodes[iParentId].child = iChild;
         }
       }
       else // This is a top level node with no parent
       {
         // Do we know of an elder?
-        if(iElder > -1)
+        if(m_iElder > -1)
         {
           // Set us to be the sibling of that elder
-          nodes[iElder].sibling = iChild;
+          m_arrNodes[m_iElder].sibling = iChild;
         }
         
         // We are the youngest elder
-        iElder = iChild;
+        m_iElder = iChild;
       }
       
       return true;
@@ -691,32 +672,30 @@ private:
 // Runtime tree node
 class rnode
 {
-  friend struct tree;
+  friend class tree;
   
   using attr_dict = unordered_map<string, string>; 
   
   // children if any
-  vector<rnode> children;
+  vector<rnode> m_arrChildren;
   
   // attributes of this node
-  attr_dict attrs;
+  attr_dict m_dctAttrs;
   
   // node tag, content text and id
-  char_view tag, text, id;
+  char_view m_symTag, m_symText, m_symId;
   
   // If content has template tags of the form {{key}}, store them in this
-  template_text templates;
+  template_text m_templates;
   
-  // Whether its a void node
-  bool bVoid{};
-  
-  int index;
+  // Whether it's a void node
+  bool m_bVoidNode {};
   
 public:
-  rnode():  index(NULL_NODE) {}
+  rnode() = default;
 
-  rnode(const char_view &tag, const char_view &text, bool bVoid, int index, template_dict &dctTemplates) 
-    : tag(tag), text(text), bVoid(bVoid), index(index) 
+  rnode(const char_view &tag, const char_view &text, bool bVoidNode, int index, template_dict &dctTemplates) 
+  : m_symTag(tag), m_symText(text), m_bVoidNode(bVoidNode) 
   {
     // Iterate through the text and detect if we have a template strings
     const char *szOpen = "{{";
@@ -731,7 +710,7 @@ public:
       // The part from itCurr to itStart is a non template chunk iff itCurr != itStart
       if(itCurr != itStart)
       {
-        templates.add(char_view(itCurr, itStart), false);
+        m_templates.add(char_view(itCurr, itStart), false);
         itCurr = itStart;
       }
       
@@ -746,7 +725,7 @@ public:
           if((itEnd - itStart) > 2)
           {
             char_view sKey(itStart + 2, itEnd);
-            templates.add(sKey, true);
+            m_templates.add(sKey, true);
             dctTemplates[string(sKey.begin(), sKey.end())] = "";
           }
           else
@@ -767,14 +746,13 @@ public:
     while(itCurr != text.end());
   }
   
-  
   void render(ostream &ostr, const template_dict &dctTemplates, int indent = 0) const
   {
     string sIndent(indent * 2, ' ');
-    string sTag{tag.m_pBeg, tag.m_pEnd};
+    string sTag{m_symTag.m_pBeg, m_symTag.m_pEnd};
 
     bool bCtrlNode = false;
-    bool bTextNode = tag == g_symText;
+    bool bTextNode = m_symTag == g_symText;
     
     // Check if the tag is a control tag
     for(const char *p: g_arrCtrlTags)
@@ -793,47 +771,47 @@ public:
       if(!bCtrlNode)
       {
         // Render the open tag, and the ID if any
-        ostr << sIndent << "<" << tag;
+        ostr << sIndent << "<" << m_symTag;
         
-        if(!id.empty())
+        if(!m_symId.empty())
         {
-          ostr << " ID" << "='" << id << '\'';
+          ostr << " ID" << "='" << m_symId << '\'';
         }
         
         // Render the attributes and close the >
-        for(const auto &attr: attrs)
+        for(const auto &attr: m_dctAttrs )
         {
           ostr << ' ' << attr.first << '=' << '\'' << attr.second << '\'';
         }
         ostr << ">";
         
-        // If taag has children add a newline
-        if(!children.empty()) 
+        // If tag has children add a newline
+        if(!m_arrChildren.empty()) 
         {
           ostr << "\n";
         }
       }
       
       // Render children if any, don't indent for control tags
-      for(const auto& child: children)
+      for(const auto& child: m_arrChildren )
       {
         child.render(ostr, dctTemplates, indent + (bCtrlNode ? 0 : 1));
       }
     }
     
     // Skip text and close tag for void tags and control tags
-    if(!bVoid)
+    if(!m_bVoidNode )
     {
-      if(!templates.parts().empty())
+      if(!m_templates.parts().empty())
       {
         ostr << sIndent;
-        templates.render(ostr, dctTemplates);
+        m_templates.render(ostr, dctTemplates);
         ostr << "\n";
       }
       
       if(!bTextNode && !bCtrlNode)
       {  
-        ostr << sIndent << "</" << tag << ">" << "\n";
+        ostr << sIndent << "</" << m_symTag << ">" << "\n";
       }
     }
     else
@@ -849,72 +827,80 @@ private:
 };
 
 // Encapsulates the runtime DOM tree including templates
-struct tree
+class tree
 {
-  rnode root;
-  template_dict templates;
+private:
+  rnode m_Root;
+
+public:  
+  template_dict m_dctTemplates;
   
   // Takes the compile time parser data and constructs thr runtime node tree 
   // Also generates a map for templates 
-  tree(const parser &parser): root("root", "", false, -1, templates)
+  tree(const parser &parser): m_Root ("root", "", false, -1, m_dctTemplates)
   {
-    build(parser, root, templates, 0);
+    build(parser, m_Root, m_dctTemplates, 0);
   }
   
   // Test function that returns a map of all the keys with value == key
   template_dict get_default_dict()
   {
     template_dict ret;
-    for(const auto &i: templates)
+    for(const auto &i: m_dctTemplates)
     {
       ret[i.first] = i.first;
     }
     return ret;
   }
     
+  rnode root() const 
+  {
+    return m_Root;
+  }
+  
   // Recursively builds the runtime tree structure from the compile time parser
   // Detects strings of the form {{key}} inside node content and adds it to a template_dict
   static void build(const parser &parser, rnode &parent, template_dict &dctTemplates, int index)
   {
     // Get the node tag and content
-    const cnode &cNode = parser.nodes[index];
+    const cnode &cNode = parser.m_arrNodes[index];
     
     // Create a SPTNode and set ID if any
     rnode rNode(cNode.tag, cNode.text, cNode.child == VOID_TAG, index, dctTemplates);
     if(!cNode.id.empty())
     {
-      rNode.id = cNode.id;
+      rNode.m_symId = cNode.id;
     }
     
     // Place this node as a child of the parent
-    parent.children.emplace_back(rNode);
+    parent.m_arrChildren.emplace_back(rNode);
     
     // If there are children for this node
     if(cNode.child > NULL_NODE)
     {
       // Check if first child is "@ATTR"
-      const auto &child = parser.nodes[cNode.child];
+      const auto &child = parser.m_arrNodes[cNode.child];
       if(child.tag == g_symAttr)
       {
         // Put the chain of attribute nodes into ther attrs array
-        auto attr = parser.nodes[child.child];
+        auto attr = parser.m_arrNodes[child.child];
         while(true)
         {
-          parent.children.back().attrs[attr.getTag()] = attr.getText();
+          parent.m_arrChildren.back().m_dctAttrs[attr.getTag()] = attr.getText();
           if(attr.sibling == NULL_NODE) break;
-          attr = parser.nodes[attr.sibling];
+          attr = parser.m_arrNodes[attr.sibling];
         }
         
         // If there were more nodes after @ATTR, recursively process them
         if(child.sibling > NULL_NODE)
         {
-          build(parser, parent.children.back(), dctTemplates, child.sibling);
+          build(parser, parent.m_arrChildren.back(), dctTemplates, child.sibling);
         }
       }
       else // No @ATTR
       {
         // Process children 
-        build(parser, parent.children.back(), dctTemplates, cNode.child);
+        build(parser, parent.m_arrChildren.back(), dctTemplates, cNode.child);
       }
     }
     
@@ -925,7 +911,6 @@ struct tree
     }
   }
 };
-
 
 } // namespace spt
 

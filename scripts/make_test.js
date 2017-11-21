@@ -14,7 +14,7 @@ int main()
   
   spt::tree spt_tree(parser);
   spt::template_dict dct;
-  spt_tree.root.render(cout, dct);
+  spt_tree.root().render(cout, dct);
 }
 `;
 

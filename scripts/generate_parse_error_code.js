@@ -58,15 +58,15 @@ ${MsgToType}
 #define DUMP_WARNING(x)                                        \\
 if((x) < n)                                                      \\
 {                                                              \\
-  constexpr auto w = parser.warns[(x)];                          \\
+  constexpr auto w = parser.m_arrWarns[(x)];                          \\
   ${warners}
 }
 
 #define REPORT_ERRORS(parser)          \\
-constexpr int n = parser.warns.size();          \\
+constexpr int n = parser.m_arrWarns.size();          \\
 ${dumps}
-constexpr bool hasErr = parser.errRow > -1 || parser.errCol > -1; \\
-spt::IF<hasErr, spt::Error<parser.errRow, parser.errCol, spt::MsgToType<parser.err>::type>> {};
+constexpr bool hasErr = parser.m_iErrRow > -1 || parser.m_iErrCol > -1; \\
+spt::IF<hasErr, spt::Error<parser.m_iErrRow, parser.m_iErrCol, spt::MsgToType<parser.m_arrErrs>::type>> {};
 
 #else
 
