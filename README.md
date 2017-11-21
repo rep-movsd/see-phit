@@ -117,5 +117,4 @@ Add more complicated templating functionality with loops, conditionals and perha
 
 Optimize the hell out of the templating engine
 
- # Join the team 
- Do you want to collaborate? Join the project at https://crowdforge.io/projects/265
+ 
