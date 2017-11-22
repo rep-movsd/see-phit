@@ -1,7 +1,9 @@
 R"*(
-<for n=1 to=10 inc=1 >
-  <div>
-  item{{n}}
-  </div>
+<for var=n from=0 to=5 >
+  <for var=m from=0 to=5 inc=2>
+    <div>
+      item{{m}}{{n}}
+    </div>
+  </for>
 </for>
-)*"_html; 
+)*"_html;

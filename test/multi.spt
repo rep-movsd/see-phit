@@ -1,0 +1,10 @@
+R"*(
+<div>
+  item
+</div>
+
+<div>
+  item2
+</div>
+
+)*"_html; 

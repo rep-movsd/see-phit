@@ -358,20 +358,23 @@ private:
   }
   
   // verifies a for tag 
-  // <for var=N to=N [inc=N]> ...
+  // <for var=name from=N to=N [inc=N]> ...
   constexpr void check_for_tag(node_attrs &attrs)
   {
-    // The three atrributes have to be in order (inc is optional)
+    // Check that we have var, from, and to atrributes (inc is optional)
     int nAttr = attrs.size(); 
-    if(nAttr < 2 || attrs[1].name != "to" || (nAttr == 3 && attrs[2].name != "inc"))
+    bool bValid = attrs[0].name == "var" && attrs[1].name == "from" && attrs[2].name == "to";
+    
+    // Check also if the 4th attribute is "inc" if it exists
+    if(!bValid || (nAttr > 3 && attrs[3].name != "inc"))
     {
       PARSE_ERR(Error_Invalid_syntax_in_for_tag);
     }
     
     // Verify that the for loop params are sane
-    int iBeg = attrs[0].value.toInt();
-    int iEnd = attrs[1].value.toInt();
-    int iInc = nAttr == 3 ? attrs[2].value.toInt() : 1;
+    int iBeg = attrs[1].value.toInt();
+    int iEnd = attrs[2].value.toInt();
+    int iInc = nAttr == 4 ? attrs[3].value.toInt() : 1;
     if((iBeg > iEnd && iInc >= 0) || (iBeg < iEnd && iInc <= 0) || iBeg == iEnd)
     {
       PARSE_ERR(Error_Infinite_loop_in_for_tag);
@@ -692,11 +695,51 @@ class rnode
   bool m_bVoidNode {};
   
   // Render the children of this node recursively
-  void render_children(ostream &ostr, const template_dict &dctTemplates, int indent) const
+  void render_children(ostream &ostr, template_dict &dctTemplates, int indent) const
   {
     for(const auto& child: m_arrChildren)
     {
       child.render(ostr, dctTemplates, indent);
+    }
+  }
+  
+  // Render the children in a for tag
+  void render_for(ostream &ostr, template_dict &dctTemplates, int indent) const
+  {
+    // Get the for loop params
+    auto iStart = std::stoi(m_dctAttrs.at("from"));
+    auto iStop = std::stoi(m_dctAttrs.at("to"));
+    auto iInc = m_dctAttrs.count("inc") ? std::stoi(m_dctAttrs.at("inc")) : 1;
+    string sVar = m_dctAttrs.at("var");
+    
+    // Save the existing variable if any (allows nested loops with same var)
+    bool bUsed = dctTemplates.count(sVar);
+    string sSaved = bUsed ? dctTemplates.at(sVar) : "";
+    
+    // Loop and render
+    for(int i = iStart; iInc > 0 ? i < iStop : i > iStop; i += iInc)
+    {
+      dctTemplates[sVar] = std::to_string(i);
+      render_children(ostr, dctTemplates, indent);
+    }
+    
+    // Restore the loop var in the template dictionary or delete it if it didnt exits before
+    if(bUsed)
+    {
+      dctTemplates[sVar] = sSaved;
+    }
+    else
+    {
+      dctTemplates.erase(sVar);
+    }
+  }
+  
+  // Render an if tag
+  void render_if(ostream &ostr, template_dict &dctTemplates, int indent) const
+  {
+    if(std::stoi(m_dctAttrs.at("cond")))
+    {
+      render_children(ostr, dctTemplates, indent);
     }
   }
   
@@ -755,7 +798,7 @@ public:
     while(itCurr != text.end());
   }
   
-  void render(ostream &ostr, const template_dict &dctTemplates, int indent = 0) const
+  void render(ostream &ostr, template_dict &dctTemplates, int indent = 0) const
   {
     string sIndent(indent * 2, ' ');
     string sTag{m_symTag.m_pBeg, m_symTag.m_pEnd};
@@ -797,26 +840,25 @@ public:
         // If tag has children add a newline
         if(!m_arrChildren.empty()) 
         {
-          ostr << "\n";
+          ostr << '\n';
           
           // Render children if any
           render_children(ostr, dctTemplates, indent + 1);
         }
       }
-      else
+      else // control tags, do not indent
       {
+        // Render children conditionally for if
         if(m_symTag == g_symIf)
         {
-          bool bCond = std::stoi(m_dctAttrs.at("cond"));
-          if(bCond)
-          {
-            // Render children if any, don't indent for control tags
-            render_children(ostr, dctTemplates, indent);
-          }
+          render_if(ostr, dctTemplates, indent);
+        }
+        else if(m_symTag == g_symFor)
+        {
+          render_for(ostr, dctTemplates, indent);
         }
         else
         {
-          // Render children if any, don't indent for control tags
           render_children(ostr, dctTemplates, indent);
         }
       }

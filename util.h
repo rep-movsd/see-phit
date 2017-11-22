@@ -249,7 +249,7 @@ struct char_view
     }
     
     // Return with sign
-    return bNeg ? ret : -ret;
+    return bNeg ? -ret : ret;
   }
   
 };
