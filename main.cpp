@@ -9,7 +9,7 @@ using namespace std;
 int main()
 {
   constexpr auto parser = 
-  #include "test/loop.spt"
+  #include "test/loop_bad.spt"
     
   REPORT_ERRORS(parser);
     

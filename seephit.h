@@ -370,14 +370,16 @@ private:
     {
       PARSE_ERR(Error_Invalid_syntax_in_for_tag);
     }
-    
-    // Verify that the for loop params are sane
-    int iBeg = attrs[1].value.toInt();
-    int iEnd = attrs[2].value.toInt();
-    int iInc = nAttr == 4 ? attrs[3].value.toInt() : 1;
-    if((iBeg > iEnd && iInc >= 0) || (iBeg < iEnd && iInc <= 0) || iBeg == iEnd)
+    else
     {
-      PARSE_ERR(Error_Infinite_loop_in_for_tag);
+      // Verify that the for loop params are sane
+      int iBeg = attrs[1].value.toInt();
+      int iEnd = attrs[2].value.toInt();
+      int iInc = nAttr == 4 ? attrs[3].value.toInt() : 1;
+      if((iBeg > iEnd && iInc >= 0) || (iBeg < iEnd && iInc <= 0) || iBeg == iEnd)
+      {
+        PARSE_ERR(Error_Infinite_loop_in_for_tag);
+      }
     }
   }
   
@@ -431,7 +433,7 @@ private:
     {
       check_if_tag(attrs);
     }
-        
+    
     // Check if void tag
     bool bIsVoidTag = INDEX_OF(node.tag.m_pBeg, arrVoidTags) != -1;
     if(bIsVoidTag)
