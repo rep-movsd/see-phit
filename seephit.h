@@ -691,6 +691,15 @@ class rnode
   // Whether it's a void node
   bool m_bVoidNode {};
   
+  // Render the children of this node recursively
+  void render_children(ostream &ostr, const template_dict &dctTemplates, int indent) const
+  {
+    for(const auto& child: m_arrChildren)
+    {
+      child.render(ostr, dctTemplates, indent);
+    }
+  }
+  
 public:
   rnode() = default;
 
@@ -789,18 +798,32 @@ public:
         if(!m_arrChildren.empty()) 
         {
           ostr << "\n";
+          
+          // Render children if any
+          render_children(ostr, dctTemplates, indent + 1);
         }
       }
-      
-      // Render children if any, don't indent for control tags
-      for(const auto& child: m_arrChildren )
+      else
       {
-        child.render(ostr, dctTemplates, indent + (bCtrlNode ? 0 : 1));
+        if(m_symTag == g_symIf)
+        {
+          bool bCond = std::stoi(m_dctAttrs.at("cond"));
+          if(bCond)
+          {
+            // Render children if any, don't indent for control tags
+            render_children(ostr, dctTemplates, indent);
+          }
+        }
+        else
+        {
+          // Render children if any, don't indent for control tags
+          render_children(ostr, dctTemplates, indent);
+        }
       }
     }
     
     // Skip text and close tag for void tags and control tags
-    if(!m_bVoidNode )
+    if(!m_bVoidNode)
     {
       if(!m_templates.parts().empty())
       {

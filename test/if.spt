@@ -1,0 +1,14 @@
+R"*(
+<if cond=0>
+  <div>
+    a
+  </div>
+</if>
+
+<if cond=1>
+  <div>
+    b
+  </div>
+</if>
+
+)*"_html; 
