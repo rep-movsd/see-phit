@@ -9,7 +9,7 @@ using namespace std;
 int main()
 {
   constexpr auto parser = 
-  #include "test/large_template.spt"
+  #include "test/loop_bench.spt"
     
   REPORT_ERRORS(parser);
     
@@ -17,11 +17,11 @@ int main()
   auto tmStart = chrono::high_resolution_clock::now();
   
   int k;
-  for(int i = 0; i < 1000; ++i)
+  for(int i = 0; i < 1; ++i)
   {
     spt::tree spt_tree(parser);
     spt::template_dict dct = spt_tree.get_default_dict();
-    spt_tree.root.render(cout, dct);
+    spt_tree.root().render(cout, dct);
     k = dct.size();
   }
   

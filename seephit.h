@@ -9,12 +9,15 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <functional>
+#include <any>
 
 using std::string;
 using std::vector;
 using std::pair;
 using std::unordered_map;
-
+using std::any;
+using std::function;
 using std::ostream;
 using std::cerr;
 using std::endl;
