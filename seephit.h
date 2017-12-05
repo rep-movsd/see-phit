@@ -1,30 +1,10 @@
 #ifndef SEEPHIT_SEEPHIT_H
 #define SEEPHIT_SEEPHIT_H
 
-#pragma once
-#include <algorithm>
-#include <cassert>
-#include <iostream>
-#include <unordered_map>
-#include <string>
-#include <utility>
-#include <vector>
-#include <functional>
-#include <any>
-
-using std::string;
-using std::vector;
-using std::pair;
-using std::unordered_map;
-using std::any;
-using std::function;
-using std::ostream;
-using std::cerr;
-using std::endl;
-
+#include "pch.h"
 #include "debug.h"
 #include "parse_error.h"
-#include "tags.hpp"
+#include "tags.h"
 #include "util.h"
 
 // maximum nodes and attributes in the tree
@@ -40,6 +20,7 @@ using attrs = vec<attr, SPT_MAX_ATTRS>;
 using cnodes = vec<cnode, SPT_MAX_NODES>;
 using node_attrs = vec<attr, SPT_MAX_ATTR_PER_NODE>;
 using warnings = vec<Message, SPT_MAX_WARNINGS>;
+
 
 // Hardcoded symbols to detect id and style
 constexpr const char_view g_symID{"id"};
@@ -700,16 +681,16 @@ class rnode
   bool m_bVoidNode {};
   
   // Render the children of this node recursively
-  void render_children(ostream &ostr, template_dict &dctTemplates, int indent) const
+  void render_children(ostream &ostr, template_vals &dctVals, template_funs &dctFuns, int indent)
   {
-    for(const auto& child: m_arrChildren)
+    for(auto& child: m_arrChildren)
     {
-      child.render(ostr, dctTemplates, indent);
+      child.render(ostr, dctVals, dctFuns, indent);
     }
   }
   
   // Render the children in a for tag
-  void render_for(ostream &ostr, template_dict &dctTemplates, int indent) const
+  void render_for(ostream &ostr, template_vals &dctVals, template_funs &dctFuns, int indent)
   {
     // Get the for loop params
     auto iStart = std::stoi(m_dctAttrs.at("from"));
@@ -718,40 +699,41 @@ class rnode
     string sVar = m_dctAttrs.at("var");
     
     // Save the existing variable if any (allows nested loops with same var)
-    bool bUsed = dctTemplates.count(sVar);
-    string sSaved = bUsed ? dctTemplates.at(sVar) : "";
+    bool bUsed = dctVals.count(sVar);
+    template_val varSaved;
+    if(bUsed) varSaved = dctVals.at(sVar);
     
     // Loop and render
     for(int i = iStart; iInc > 0 ? i < iStop : i > iStop; i += iInc)
     {
-      dctTemplates[sVar] = std::to_string(i);
-      render_children(ostr, dctTemplates, indent);
+      dctVals[sVar] = i;
+      render_children(ostr, dctVals, dctFuns, indent);
     }
     
     // Restore the loop var in the template dictionary or delete it if it didnt exits before
     if(bUsed)
     {
-      dctTemplates[sVar] = sSaved;
+      dctVals[sVar] = varSaved;
     }
     else
     {
-      dctTemplates.erase(sVar);
+      dctVals.erase(sVar);
     }
   }
   
   // Render an if tag
-  void render_if(ostream &ostr, template_dict &dctTemplates, int indent) const
+  void render_if(ostream &ostr, template_vals &dctVals, template_funs &dctFuns, int indent)
   {
     if(std::stoi(m_dctAttrs.at("cond")))
     {
-      render_children(ostr, dctTemplates, indent);
+      render_children(ostr, dctVals, dctFuns, indent);
     }
   }
   
 public:
   rnode() = default;
 
-  rnode(const char_view &tag, const char_view &text, bool bVoidNode, int index, template_dict &dctTemplates) 
+  rnode(const char_view &tag, const char_view &text, bool bVoidNode, int index) 
   : m_symTag(tag), m_symText(text), m_bVoidNode(bVoidNode) 
   {
     // Iterate through the text and detect if we have a template strings
@@ -783,7 +765,6 @@ public:
           {
             char_view sKey(itStart + 2, itEnd);
             m_templates.add(sKey, true);
-            dctTemplates[string(sKey.begin(), sKey.end())] = "";
           }
           else
           {
@@ -803,7 +784,7 @@ public:
     while(itCurr != text.end());
   }
   
-  void render(ostream &ostr, template_dict &dctTemplates, int indent = 0) const
+  void render(ostream &ostr, template_vals &dctVals, template_funs &dctFuns, int indent = 0)
   {
     string sIndent(indent * 2, ' ');
     string sTag{m_symTag.m_pBeg, m_symTag.m_pEnd};
@@ -848,7 +829,7 @@ public:
           ostr << '\n';
           
           // Render children if any
-          render_children(ostr, dctTemplates, indent + 1);
+          render_children(ostr, dctVals, dctFuns, indent + 1);
         }
       }
       else // control tags, do not indent
@@ -856,15 +837,15 @@ public:
         // Render children conditionally for if
         if(m_symTag == g_symIf)
         {
-          render_if(ostr, dctTemplates, indent);
+          render_if(ostr, dctVals, dctFuns, indent);
         }
         else if(m_symTag == g_symFor)
         {
-          render_for(ostr, dctTemplates, indent);
+          render_for(ostr, dctVals, dctFuns, indent);
         }
         else
         {
-          render_children(ostr, dctTemplates, indent);
+          render_children(ostr, dctVals, dctFuns, indent);
         }
       }
     }
@@ -875,7 +856,7 @@ public:
       if(!m_templates.parts().empty())
       {
         ostr << sIndent;
-        m_templates.render(ostr, dctTemplates);
+        m_templates.render(ostr, dctVals, dctFuns);
         ostr << "\n";
       }
       
@@ -893,7 +874,6 @@ public:
     }
   }
   
-private:
 };
 
 // Encapsulates the runtime DOM tree including templates
@@ -903,20 +883,21 @@ private:
   rnode m_Root;
 
 public:  
-  template_dict m_dctTemplates;
+  template_vals m_dctTemplateVals;
+  template_funs m_dctTemplateFuns;
   
   // Takes the compile time parser data and constructs thr runtime node tree 
   // Also generates a map for templates 
-  tree(const parser &parser): m_Root ("root", "", false, -1, m_dctTemplates)
+  tree(const parser &parser): m_Root ("root", "", false, -1)
   {
-    build(parser, m_Root, m_dctTemplates, 0);
+    build(parser, m_Root, 0);
   }
   
   // Test function that returns a map of all the keys with value == key
-  template_dict get_default_dict()
+  template_vals get_default_dict()
   {
-    template_dict ret;
-    for(const auto &i: m_dctTemplates)
+    template_vals ret;
+    for(const auto &i: m_dctTemplateVals)
     {
       ret[i.first] = i.first;
     }
@@ -930,13 +911,13 @@ public:
   
   // Recursively builds the runtime tree structure from the compile time parser
   // Detects strings of the form {{key}} inside node content and adds it to a template_dict
-  static void build(const parser &parser, rnode &parent, template_dict &dctTemplates, int index)
+  static void build(const parser &parser, rnode &parent, int index)
   {
     // Get the node tag and content
     const cnode &cNode = parser.m_arrNodes[index];
     
     // Create a SPTNode and set ID if any
-    rnode rNode(cNode.tag, cNode.text, cNode.child == VOID_TAG, index, dctTemplates);
+    rnode rNode(cNode.tag, cNode.text, cNode.child == VOID_TAG, index);
     if(!cNode.id.empty())
     {
       rNode.m_symId = cNode.id;
@@ -964,20 +945,20 @@ public:
         // If there were more nodes after @ATTR, recursively process them
         if(child.sibling > NULL_NODE)
         {
-          build(parser, parent.m_arrChildren.back(), dctTemplates, child.sibling);
+          build(parser, parent.m_arrChildren.back(), child.sibling);
         }
       }
       else // No @ATTR
       {
         // Process children 
-        build(parser, parent.m_arrChildren.back(), dctTemplates, cNode.child);
+        build(parser, parent.m_arrChildren.back(), cNode.child);
       }
     }
     
     // Process siblings
     if(cNode.sibling > NULL_NODE)
     {
-      build(parser, parent, dctTemplates, cNode.sibling);
+      build(parser, parent, cNode.sibling);
     }
   }
 };

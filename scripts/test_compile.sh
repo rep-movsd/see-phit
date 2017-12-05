@@ -18,7 +18,7 @@ done
 for i in *.spt; 
 do
   printf "${NC}$i\n"
-  time g++ -I.. -S --std=c++14 $i.cpp &> /tmp/$i.err
+  time g++ -I.. -S --std=c++17 -Wall $i.cpp &> /tmp/$i.err
   printf "\n"
   
   if (egrep -o "((Warning\(\) \[.*)|(Error\(\) \[.*))" /tmp/$i.err > /tmp/$i.perr); then

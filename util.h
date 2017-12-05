@@ -1,7 +1,7 @@
 #ifndef SEEPHIT_UTIL_H
 #define SEEPHIT_UTIL_H
 
-#pragma once
+#include "pch.h"
 
 namespace spt
 {
@@ -9,9 +9,16 @@ namespace spt
 const int NULL_NODE = -1;
 const int VOID_TAG = -2;
 
- 
-// Map of template names to values
-using template_dict = unordered_map<string, string>;
+// Template vals is a map of string to a template value
+using template_val = variant<int, string, float>;
+using template_vals = unordered_map<string, template_val>;
+
+// Template funs is a map of string to a template render function
+// functions are written like @fn@param
+// when rendered function is passed the literal text of the param (this is useful for loops)
+// Function also get the template dictionary, which it can mutate for storing state
+using template_fun = function<void(ostream &, const string &sParam, template_vals &)>;
+using template_funs = unordered_map<string, template_fun>;
 
 // Basic constexpr functions for text processing
 constexpr char to_upper(char ch)
@@ -277,7 +284,30 @@ public:
     m_arrParts.push_back(std::make_pair(sym, bIsTemplate));
   }
   
-  void render(ostream &ostr, const template_dict& dctTemplates) const
+  // Checks if a map has the given key, and throws if not 
+  template<class T> void checkTemplateKey(const T& dct, const string &sKey)
+  {
+    auto i = dct.find(sKey);
+    if(i == dct.end())
+    {
+      cerr << endl << "Template key undefined: '" << sKey << "'" << endl;
+      throw false;
+    }
+  }
+  
+  // renders val if its of type T
+  template<typename T> bool render_value_if_type(ostream &ostr, const template_val &val) const
+  {
+    if(std::holds_alternative<T>(val))
+    {
+      ostr << std::get<T>(val);
+      return true;
+    }
+    return false;
+  }
+
+  // Renders this node
+  void render(ostream &ostr, template_vals& dctVals, template_funs& dctFuns)
   {
     // Render each part
     for(const auto &part: m_arrParts)
@@ -287,14 +317,35 @@ public:
       {
         // Get key and ensure it is in the map, then render the value
         string sKey(part.first.begin(), part.first.end());
-        auto i = dctTemplates.find(sKey);
-        if(i == dctTemplates.end())
-        {
-          cerr << endl << "Template key undefined: '" << sKey << "'" << endl;
-          throw false;
-        }
         
-        ostr << i->second;
+        // Keys starting with $ are functions + 1)
+        if(sKey[0] == '$')
+        {
+          // function is of the form $fn@param, check if @ is present
+          auto it = find(begin(sKey), end(sKey), '@');
+          
+          // Get the function name and check if its defined
+          string sFnName{begin(sKey) + 1, it};
+          checkTemplateKey(dctFuns, sFnName);
+          
+          // If there is an @param, extract the param
+          string sParam;
+          if(it != end(sKey) && ++it != end(sKey))
+          {
+            sParam = string(it, end(sKey));
+          }
+          
+          // Invoke the function -> void(ostream &, const string &, template_vals &)>)
+          // Function may mutate the dictionary
+          dctFuns[sFnName](ostr, sParam, dctVals);
+        }
+        else // regular template value
+        {
+          checkTemplateKey(dctVals, sKey);
+          render_value_if_type<int>(ostr, dctVals[sKey])    ||
+          render_value_if_type<string>(ostr, dctVals[sKey]) ||
+          render_value_if_type<float>(ostr, dctVals[sKey]);
+        }
       }
       else // Non template text, render it
       {
@@ -304,7 +355,6 @@ public:
   }
   
   std::vector<pair<char_view, bool>> parts() const { return m_arrParts; }
-  
 };
 
 // Simple abstraction for a symbol table

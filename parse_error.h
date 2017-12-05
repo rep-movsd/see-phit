@@ -1,7 +1,7 @@
 #ifndef SEEPHIT_PARSE_ERROR_H
 #define SEEPHIT_PARSE_ERROR_H
 
-#pragma once 
+#include "pch.h"
 
 namespace spt
 {
@@ -48,8 +48,6 @@ template<int ROW, int COL, typename WHAT> struct Error
 template<bool Cond, class T = void> struct IF;
 template<class T> struct IF<true, T> { T it; };
 template<class T> struct IF<false, T> {};
-
-
 
 }  // namespace spt
 #endif

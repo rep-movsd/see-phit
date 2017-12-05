@@ -20,8 +20,23 @@ int main()
   for(int i = 0; i < 1; ++i)
   {
     spt::tree spt_tree(parser);
-    spt::template_dict dct = spt_tree.get_default_dict();
-    spt_tree.root().render(cout, dct);
+    spt::template_vals dct;
+    spt::template_funs dctFuns;
+    
+    dctFuns["double"] = 
+    [](ostream &ostr, const string &sKey, spt::template_vals &vals)
+    {
+      ostr << std::get<int>(vals[sKey]) * 2;
+    };
+    
+    dctFuns["quote"] = 
+    [](ostream &ostr, const string &sKey, spt::template_vals &vals)
+    {
+      ostr << '\'' << std::get<int>(vals[sKey]) << '\'';
+    };
+    
+    
+    spt_tree.root().render(cout, dct, dctFuns);
     k = dct.size();
   }
   
